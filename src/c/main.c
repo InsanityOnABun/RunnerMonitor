@@ -19,10 +19,9 @@ static GFont      s_font_big;
 static GFont      s_font_small;
 
 static char s_time_buf[12];
-static char s_date_raw_buf[20];
 static char s_date_buf[20];
-static char s_battery_buf[30];
-static char s_signal_buf[22];
+static char s_battery_buf[22];
+static char s_signal_buf[18];
 
 static int  s_battery = 100;
 static bool s_bt_connected = true;
@@ -33,7 +32,6 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     GColor fg = s_bt_connected ? COLOR_ACID : COLOR_ALERT;
 
     graphics_context_set_stroke_color(ctx, fg);
-    graphics_context_set_fill_color(ctx, fg);
     graphics_context_set_stroke_width(ctx, 2);
 
     // Corner brackets — HUD reticle framing
@@ -51,10 +49,18 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m - len, b.size.h - m));
     graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m, b.size.h - m - len));
 
-    // Rule lines above and below the time block
+    // Small "signal" triangle glyph, top-center - everything past here has stroke width of 1
+    graphics_context_set_stroke_width(ctx, 1);
+    GPoint apex = GPoint(b.size.w / 2, m + 2);
+    graphics_draw_line(ctx, GPoint(apex.x - 5, apex.y + 8), GPoint(apex.x, apex.y));
+    graphics_draw_line(ctx, GPoint(apex.x + 5, apex.y + 8), GPoint(apex.x, apex.y));
+    graphics_draw_line(ctx, GPoint(apex.x - 5, apex.y + 8), GPoint(apex.x + 5, apex.y + 8));
+
+    // Rule line above and below the time block - everything past here is always green
     int rule_y1 = b.size.h / 2 - 32;
     int rule_y2 = b.size.h / 2 + 30;
-    graphics_context_set_stroke_width(ctx, 1);
+    graphics_context_set_stroke_color(ctx, COLOR_ACID);
+    graphics_context_set_fill_color(ctx, COLOR_ACID);
     graphics_draw_line(ctx, GPoint(m + 8, rule_y1), GPoint(b.size.w - m - 8, rule_y1));
     graphics_draw_line(ctx, GPoint(m + 8, rule_y2), GPoint(b.size.w - m - 8, rule_y2));
 
@@ -65,42 +71,36 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     int by = b.size.h - m - seg_h - 8;
     int lit = (s_battery + 9) / 10;
     for (int i = 0; i < 10; i++) {
-        GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
-        if (i < lit) {
-            graphics_fill_rect(ctx, seg, 0, GCornerNone);
-        } else {
-            graphics_draw_rect(ctx, seg);
-        }
+    GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
+    if (i < lit) {
+        graphics_fill_rect(ctx, seg, 0, GCornerNone);
+    } else {
+        graphics_draw_rect(ctx, seg);
     }
-
-    // Small "signal" triangle glyph, top-center
-    GPoint apex = GPoint(b.size.w / 2, m + 2);
-    graphics_draw_line(ctx, GPoint(apex.x - 5, apex.y + 8), GPoint(apex.x, apex.y));
-    graphics_draw_line(ctx, GPoint(apex.x + 5, apex.y + 8), GPoint(apex.x, apex.y));
-    graphics_draw_line(ctx, GPoint(apex.x - 5, apex.y + 8), GPoint(apex.x + 5, apex.y + 8));
+    }
 }
 
 // --- State updates ----------------------------------------------------------
+// Signal update
 static void update_signal(void) {
     if (s_bt_connected) {
-        snprintf(s_signal_buf, sizeof(s_signal_buf), "LOC: TAU CETI IV");
+        snprintf(s_signal_buf, sizeof(s_signal_buf), "TAU CETI IV");
         text_layer_set_text_color(s_top_layer, COLOR_ACID);
         text_layer_set_text_color(s_signal_layer, COLOR_ACID);
         text_layer_set_text_color(s_weather_layer, COLOR_ACID);
-        text_layer_set_text_color(s_battery_layer, COLOR_ACID);
     } else {
-        snprintf(s_signal_buf, sizeof(s_signal_buf), "LOC: !! NO SIGNAL !!");
+        snprintf(s_signal_buf, sizeof(s_signal_buf), "!! SIGNAL LOST !!");
         text_layer_set_text_color(s_top_layer, COLOR_ALERT);
         text_layer_set_text_color(s_signal_layer, COLOR_ALERT);
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
-        text_layer_set_text_color(s_battery_layer, COLOR_ALERT);
     }
     text_layer_set_text(s_signal_layer, s_signal_buf);
 }
 
-static void update_weather(void) {
-}
+// Weather update
+static void update_weather(void) {}
 
+// Time and date update
 static void update_time(void) {
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
@@ -108,15 +108,11 @@ static void update_time(void) {
     strftime(s_time_buf, sizeof(s_time_buf), clock_is_24h_style() ? "%H:%M" : "%I:%M %p", t);
     text_layer_set_text(s_time_layer, s_time_buf);
 
-    strftime(s_date_raw_buf, sizeof(s_date_raw_buf), "%a. %b %d %Y", t);
-    // Maratype has no lowercase — force caps
-    for (char *p = s_date_raw_buf; *p; p++) {
-        if (*p >= 'a' && *p <= 'z') *p -= 32;
-    }
-    snprintf(s_date_buf, sizeof(s_date_buf), "%s", s_date_raw_buf);
+    strftime(s_date_buf, sizeof(s_date_buf), "%a. %b %d %Y", t);
     text_layer_set_text(s_date_layer, s_date_buf);
 }
 
+// Battery update
 static void update_battery(void) {
     snprintf(s_battery_buf, sizeof(s_battery_buf), "SHELL INTEGRITY %d%%", s_battery);
     text_layer_set_text(s_battery_layer, s_battery_buf);
