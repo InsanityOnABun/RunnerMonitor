@@ -1,6 +1,6 @@
 #include <pebble.h>
 
-// ─── MARATHON palette ────────────────────────────────────────────────
+// --- MARATHON palette -------------------------------------------------------
 // Acid yellow-green on void black; magenta for Runner alert states.
 #define COLOR_ACID   PBL_IF_COLOR_ELSE(GColorSpringBud, GColorWhite)
 #define COLOR_ALERT  PBL_IF_COLOR_ELSE(GColorMagenta,   GColorWhite)
@@ -27,7 +27,7 @@ static char s_signal_buf[22];
 static int  s_battery = 100;
 static bool s_bt_connected = true;
 
-// ─── Rendering ───────────────────────────────────────────────────────
+// --- Rendering --------------------------------------------------------------
 static void canvas_update_proc(Layer *layer, GContext *ctx) {
     GRect b = layer_get_bounds(layer);
     GColor fg = s_bt_connected ? COLOR_ACID : COLOR_ALERT;
@@ -80,7 +80,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_draw_line(ctx, GPoint(apex.x - 5, apex.y + 8), GPoint(apex.x + 5, apex.y + 8));
 }
 
-// ─── State updates ───────────────────────────────────────────────────
+// --- State updates ----------------------------------------------------------
 static void update_signal(void) {
     if (s_bt_connected) {
         snprintf(s_signal_buf, sizeof(s_signal_buf), "LOC: TAU CETI IV");
@@ -122,6 +122,8 @@ static void update_battery(void) {
     text_layer_set_text(s_battery_layer, s_battery_buf);
 }
 
+// --- Event handlers ---------------------------------------------------------
+
 static void tick_handler(struct tm *tick_time, TimeUnits changed) {
     update_time();
 }
@@ -139,7 +141,7 @@ static void bt_handler(bool connected) {
     layer_mark_dirty(s_canvas_layer);
 }
 
-// ─── Window lifecycle ────────────────────────────────────────────────
+// --- Window lifecycle -------------------------------------------------------
 static void window_load(Window *window) {
     Layer *root = window_get_root_layer(window);
     GRect b = layer_get_bounds(root);
@@ -197,6 +199,7 @@ static void window_load(Window *window) {
     // Battery
     s_battery_layer = text_layer_create(GRect(0, b.size.h - 38, b.size.w, 18));
     text_layer_set_font(s_battery_layer, s_font_small);
+    text_layer_set_text_color(s_battery_layer, COLOR_ACID);
     text_layer_set_background_color(s_battery_layer, GColorClear);
     text_layer_set_text_alignment(s_battery_layer, GTextAlignmentCenter);
     layer_add_child(root, text_layer_get_layer(s_battery_layer));
