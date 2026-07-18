@@ -14,16 +14,19 @@ static TextLayer *s_signal_layer;
 static TextLayer *s_weather_layer;
 static TextLayer *s_time_layer;
 static TextLayer *s_date_layer;
+static TextLayer *s_steps_layer;
 static TextLayer *s_battery_layer;
 static GFont      s_font_big;
 static GFont      s_font_small;
 
 static char s_time_buf[12];
 static char s_date_buf[20];
+static char s_steps_buf[20];
 static char s_battery_buf[22];
 static char s_signal_buf[18];
 
 static int  s_battery = 100;
+static int  s_steps = 0;
 static bool s_bt_connected = true;
 
 // --- Rendering --------------------------------------------------------------
@@ -112,6 +115,9 @@ static void update_time(void) {
     text_layer_set_text(s_date_layer, s_date_buf);
 }
 
+// Steps update
+static void update_steps(void) {}
+
 // Battery update
 static void update_battery(void) {
     snprintf(s_battery_buf, sizeof(s_battery_buf), "SHELL INTEGRITY %d%%", s_battery);
@@ -185,12 +191,21 @@ static void window_load(Window *window) {
     layer_add_child(root, text_layer_get_layer(s_time_layer));
 
     // Date
-    s_date_layer = text_layer_create(GRect(0, b.size.h / 2 + 34, b.size.w, 20));
+    s_date_layer = text_layer_create(GRect(0, b.size.h - 78, b.size.w, 20));
     text_layer_set_font(s_date_layer, s_font_small);
     text_layer_set_text_color(s_date_layer, COLOR_ACID);
     text_layer_set_background_color(s_date_layer, GColorClear);
     text_layer_set_text_alignment(s_date_layer, GTextAlignmentCenter);
     layer_add_child(root, text_layer_get_layer(s_date_layer));
+        
+    // Steps
+    s_steps_layer = text_layer_create(GRect(0, b.size.h - 58, b.size.w, 20));
+    text_layer_set_text(s_steps_layer, "WEATHER PLACEHOLDER");
+    text_layer_set_font(s_steps_layer, s_font_small);
+    text_layer_set_text_color(s_steps_layer, COLOR_ACID);
+    text_layer_set_background_color(s_steps_layer, GColorClear);
+    text_layer_set_text_alignment(s_steps_layer, GTextAlignmentCenter);
+    layer_add_child(root, text_layer_get_layer(s_steps_layer));
 
     // Battery
     s_battery_layer = text_layer_create(GRect(0, b.size.h - 38, b.size.w, 18));
@@ -211,6 +226,7 @@ static void window_unload(Window *window) {
     text_layer_destroy(s_weather_layer);
     text_layer_destroy(s_time_layer);
     text_layer_destroy(s_date_layer);
+    text_layer_destroy(s_steps_layer);
     text_layer_destroy(s_battery_layer);
     layer_destroy(s_canvas_layer);
     fonts_unload_custom_font(s_font_big);
