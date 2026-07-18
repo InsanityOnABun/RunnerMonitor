@@ -74,12 +74,12 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     int by = b.size.h - m - seg_h - 8;
     int lit = (s_battery + 9) / 10;
     for (int i = 0; i < 10; i++) {
-    GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
-    if (i < lit) {
-        graphics_fill_rect(ctx, seg, 0, GCornerNone);
-    } else {
-        graphics_draw_rect(ctx, seg);
-    }
+        GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
+        if (i < lit) {
+            graphics_fill_rect(ctx, seg, 0, GCornerNone);
+        } else {
+            graphics_draw_rect(ctx, seg);
+        }
     }
 }
 
@@ -111,7 +111,7 @@ static void update_time(void) {
     strftime(s_time_buf, sizeof(s_time_buf), clock_is_24h_style() ? "%H:%M" : "%I:%M %p", t);
     text_layer_set_text(s_time_layer, s_time_buf);
 
-    strftime(s_date_buf, sizeof(s_date_buf), "%a. %b %d %Y", t);
+    strftime(s_date_buf, sizeof(s_date_buf), "%a - %b %d %Y", t);
     text_layer_set_text(s_date_layer, s_date_buf);
 }
 
@@ -200,7 +200,7 @@ static void window_load(Window *window) {
         
     // Steps
     s_steps_layer = text_layer_create(GRect(0, b.size.h - 58, b.size.w, 20));
-    text_layer_set_text(s_steps_layer, "WEATHER PLACEHOLDER");
+    text_layer_set_text(s_steps_layer, "STEPS PLACEHOLDER");
     text_layer_set_font(s_steps_layer, s_font_small);
     text_layer_set_text_color(s_steps_layer, COLOR_ACID);
     text_layer_set_background_color(s_steps_layer, GColorClear);
@@ -244,11 +244,9 @@ static void init(void) {
 
     tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
     battery_state_service_subscribe(battery_handler);
-    s_battery = battery_state_service_peek().charge_percent;
     connection_service_subscribe((ConnectionHandlers){
         .pebble_app_connection_handler = bt_handler,
     });
-    s_bt_connected = connection_service_peek_pebble_app_connection();
 }
 
 static void deinit(void) {
@@ -259,6 +257,8 @@ static void deinit(void) {
 }
 
 int main(void) {
+    s_battery = battery_state_service_peek().charge_percent;
+    s_bt_connected = connection_service_peek_pebble_app_connection();
     init();
     app_event_loop();
     deinit();
