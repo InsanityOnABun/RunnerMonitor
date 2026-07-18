@@ -1,0 +1,43 @@
+{
+    "author": "charles@rosaaen.dev",
+    "dependencies": {},
+    "keywords": [],
+    "name": "runner-monitor",
+    "pebble": {
+        "displayName": "RUNNER // MONITOR",
+        "enableMultiJS": true,
+        "messageKeys": [],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "fonts/Maratype.otf",
+                    "name": "FONT_MARATYPE_50",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
+                    "file": "fonts/Maratype.otf",
+                    "name": "FONT_MARATYPE_16",
+                    "targetPlatforms": null,
+                    "type": "font"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk",
+            "diorite",
+            "emery",
+            "gabbro",
+            "flint"
+        ],
+        "uuid": "a27fdd15-85a2-4fe1-83fe-7c958ea5ebc9",
+        "watchapp": {
+            "watchface": true
+        }
+    },
+    "version": "1.0.0"
+}
