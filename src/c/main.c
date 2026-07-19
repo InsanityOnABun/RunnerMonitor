@@ -189,6 +189,15 @@ static void outbox_sent_handler(DictionaryIterator *iterator, void *context) {
 }
 
 // --- Window lifecycle -------------------------------------------------------
+static void setup_text_layer(TextLayer* layer, GRect bounds, char* text, GFont font) {
+    layer = text_layer_create(bounds);
+    if (text != NULL) text_layer_set_text(layer, text);
+    text_layer_set_font(layer, font);
+    text_layer_set_text_color(layer, COLOR_ACID);
+    text_layer_set_background_color(layer, GColorClear);
+    text_layer_set_text_alignment(layer, GTextAlignmentCenter);
+}
+
 static void window_load(Window *window) {
     Layer *root = window_get_root_layer(window);
     GRect bounds = layer_get_bounds(root);
@@ -201,62 +210,31 @@ static void window_load(Window *window) {
     layer_add_child(root, s_canvas_layer);
 
     // Header
-    s_top_layer = text_layer_create(GRect(0, 22, bounds.size.w, 20));
-    text_layer_set_text(s_top_layer, "RUNNER // MONITOR");
-    text_layer_set_font(s_top_layer, s_font_small);
-    text_layer_set_text_color(s_top_layer, COLOR_ACID);
-    text_layer_set_background_color(s_top_layer, GColorClear);
-    text_layer_set_text_alignment(s_top_layer, GTextAlignmentCenter);
+    setup_text_layer(s_top_layer, GRect(0, 22, bounds.size.w, 20), "RUNNER // MONITOR", s_font_small);
     layer_add_child(root, text_layer_get_layer(s_top_layer));
         
     // Signal
-    s_signal_layer = text_layer_create(GRect(0, 42, bounds.size.w, 20));
-    text_layer_set_font(s_signal_layer, s_font_small);
-    text_layer_set_text_color(s_signal_layer, COLOR_ACID);
-    text_layer_set_background_color(s_signal_layer, GColorClear);
-    text_layer_set_text_alignment(s_signal_layer, GTextAlignmentCenter);
+    setup_text_layer(s_signal_layer, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
     layer_add_child(root, text_layer_get_layer(s_signal_layer));
         
     // Weather
-    s_weather_layer = text_layer_create(GRect(0, 62, bounds.size.w, 20));
-    text_layer_set_text(s_weather_layer, "WEATHER PLACEHOLDER");
-    text_layer_set_font(s_weather_layer, s_font_small);
-    text_layer_set_text_color(s_weather_layer, COLOR_ACID);
-    text_layer_set_background_color(s_weather_layer, GColorClear);
-    text_layer_set_text_alignment(s_weather_layer, GTextAlignmentCenter);
+    setup_text_layer(s_weather_layer, GRect(0, 62, bounds.size.w, 20), "!! CONDITIONS UNKNOWN !!", s_font_small);
     layer_add_child(root, text_layer_get_layer(s_weather_layer));
 
     // Time
-    s_time_layer = text_layer_create(GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62));
-    text_layer_set_font(s_time_layer, s_font_big);
-    text_layer_set_text_color(s_time_layer, COLOR_ACID);
-    text_layer_set_background_color(s_time_layer, GColorClear);
-    text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
+    setup_text_layer(s_time_layer, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
     layer_add_child(root, text_layer_get_layer(s_time_layer));
 
     // Date
-    s_date_layer = text_layer_create(GRect(0, bounds.size.h - 78, bounds.size.w, 20));
-    text_layer_set_font(s_date_layer, s_font_small);
-    text_layer_set_text_color(s_date_layer, COLOR_ACID);
-    text_layer_set_background_color(s_date_layer, GColorClear);
-    text_layer_set_text_alignment(s_date_layer, GTextAlignmentCenter);
+    setup_text_layer(s_date_layer, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
     layer_add_child(root, text_layer_get_layer(s_date_layer));
         
     // Steps
-    s_steps_layer = text_layer_create(GRect(0, bounds.size.h - 58, bounds.size.w, 20));
-    text_layer_set_text(s_steps_layer, "STEPS PLACEHOLDER");
-    text_layer_set_font(s_steps_layer, s_font_small);
-    text_layer_set_text_color(s_steps_layer, COLOR_ACID);
-    text_layer_set_background_color(s_steps_layer, GColorClear);
-    text_layer_set_text_alignment(s_steps_layer, GTextAlignmentCenter);
+    setup_text_layer(s_steps_layer, GRect(0, bounds.size.h - 58, bounds.size.w, 20), "STEPS - 0", s_font_small);
     layer_add_child(root, text_layer_get_layer(s_steps_layer));
 
     // Battery
-    s_battery_layer = text_layer_create(GRect(0, bounds.size.h - 38, bounds.size.w, 18));
-    text_layer_set_font(s_battery_layer, s_font_small);
-    text_layer_set_text_color(s_battery_layer, COLOR_ACID);
-    text_layer_set_background_color(s_battery_layer, GColorClear);
-    text_layer_set_text_alignment(s_battery_layer, GTextAlignmentCenter);
+    setup_text_layer(s_battery_layer, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
     layer_add_child(root, text_layer_get_layer(s_battery_layer));
     
     s_battery = battery_state_service_peek().charge_percent;
