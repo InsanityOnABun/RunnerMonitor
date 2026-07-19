@@ -1,12 +1,3 @@
-var xhrRequest = function (url, type, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.onload = function () {
-        callback(this.responseText);
-    };
-    xhr.open(type, url);
-    xhr.send();
-};
-
 function weatherCodeToCondition(code) {
     if (code === 0) return 'Clear';
     if (code <= 3) return 'Cloudy';
@@ -25,29 +16,40 @@ function weatherCodeToCondition(code) {
 }
 
 function locationSuccess(pos) {
-    var url = 'https://api.open-meteo.com/v1/forecast?' +
-            'latitude=' + pos.coords.latitude +
-            '&longitude=' + pos.coords.longitude +
-            '&current=temperature_2m,weather_code';
+    var urlWeather = 'https://api.open-meteo.com/v1/forecast?' +
+        'latitude=' + pos.coords.latitude +
+        '&longitude=' + pos.coords.longitude +
+        '&current=temperature_2m,weather_code';
 
-    xhrRequest(url, 'GET',
-        function(responseText) {
-            var json = JSON.parse(responseText);
+    var urlCity = 'https://api.bigdatacloud.net/data/reverse-geocode-client?' +
+        'latitude=' + pos.coords.latitude +
+        '&longitude=' + pos.coords.longitude +
+        '&localityLanguage=en';
 
-            var temperature = Math.round(json.current.temperature_2m * 1.8 + 32);
-            var conditions = weatherCodeToCondition(json.current.weather_code);
+    var xhrWeather = new XMLHttpRequest();
+    xhrWeather.open("GET", urlWeather, false);
+    xhrWeather.send();
 
-            var dictionary = {
-                'TEMPERATURE': temperature,
-                'CONDITIONS': conditions
-            };
+    var xhrCity = new XMLHttpRequest();
+    xhrCity.open("GET", urlCity, false);
+    xhrCity.send();
 
-            Pebble.sendAppMessage(dictionary,
-                function(e) { console.log('Weather info sent!'); },
-                function(e) { console.log('Error sending weather info!'); }
-            );
-        }
-    );
+    var weatherJson = JSON.parse(xhrWeather.responseText);
+    var temperature = Math.round(weatherJson.current.temperature_2m * 1.8 + 32);
+    var conditions = weatherCodeToCondition(weatherJson.current.weather_code);
+    
+    var city = JSON.parse(xhrCity.responseText).city;
+
+    var dictionary = {
+        'TEMPERATURE': temperature,
+        'CONDITIONS': conditions,
+        'CITY': city
+    };
+
+    Pebble.sendAppMessage(dictionary,
+                          function(e) { console.log('Weather info sent!'); },
+                          function(e) { console.log('Error sending weather info!'); }
+                         );
 }
 
 function locationError(err) {
@@ -63,17 +65,17 @@ function getWeather() {
 }
 
 Pebble.addEventListener('ready',
-    function(e) {
-        console.log('PebbleKit JS ready!');
-        getWeather();
-    }
-);
+                        function(e) {
+                            console.log('PebbleKit JS ready!');
+                            getWeather();
+                        }
+                       );
 
 Pebble.addEventListener('appmessage',
-    function(e) {
-        console.log('AppMessage received!');
-        if (e.payload['REQUEST_WEATHER']) {
-            getWeather();
-        }
-    }
-);
+                        function(e) {
+                            console.log('AppMessage received!');
+                            if (e.payload['REQUEST_WEATHER']) {
+                                getWeather();
+                            }
+                        }
+                       );

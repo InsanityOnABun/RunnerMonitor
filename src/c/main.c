@@ -161,8 +161,15 @@ static void bt_handler(bool connected) {
 }
 
 static void inbox_received_handler(DictionaryIterator *iterator, void *context) {
+    Tuple *city_tuple = dict_find(iterator, MESSAGE_KEY_CITY);
     Tuple *temp_tuple = dict_find(iterator, MESSAGE_KEY_TEMPERATURE);
     Tuple *conditions_tuple = dict_find(iterator, MESSAGE_KEY_CONDITIONS);
+    
+    if (city_tuple) {
+        static char city_buffer[20];
+        snprintf(city_buffer, sizeof(city_buffer), "%s", city_tuple->value->cstring);
+        text_layer_set_text(s_signal_layer, city_buffer);
+    }
 
     if (temp_tuple && conditions_tuple) {
         static char temperature_buffer[8];

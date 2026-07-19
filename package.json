@@ -13,7 +13,8 @@
         "messageKeys": [
             "TEMPERATURE",
             "CONDITIONS",
-            "REQUEST_WEATHER"
+            "REQUEST_WEATHER",
+            "CITY"
         ],
         "projectType": "native",
         "resources": {
