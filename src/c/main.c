@@ -13,7 +13,7 @@ typedef struct ClaySettings {
     bool showCity;
     bool showWeather;
     bool useFahrenheit;
-    char* topText;
+    char *topText;
 } ClaySettings;
 
 static ClaySettings settings;
@@ -221,13 +221,12 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         static char conditions_buffer[32];
         static char weather_layer_buffer[42];
         
-        int t = (int)temp_tuple->value->int32;
-        if (settings.useFahrenheit) t = t * 1.8 + 32;
+        int t = settings.useFahrenheit ? (int)temp_tuple->value->int32 * 1.8 + 32 : (int)temp_tuple->value->int32;
         char *tLabel = settings.useFahrenheit ? "F" : "C";
 
-        snprintf(temperature_buffer, sizeof(temperature_buffer), "%d° %s", (int)temp_tuple->value->int32, tLabel);
+        snprintf(temperature_buffer, sizeof(temperature_buffer), "%d° %s", t, tLabel);
         snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions_tuple->value->cstring);
-        snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s %s", temperature_buffer, conditions_buffer);
+        snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s - %s", temperature_buffer, conditions_buffer);
         text_layer_set_text(s_weather_layer, weather_layer_buffer);
     } else {
         text_layer_set_text(s_weather_layer, "ATMOSPHERE // NOT FOUND");
@@ -249,7 +248,7 @@ static void outbox_sent_handler(DictionaryIterator *iterator, void *context) {
 }
 
 // --- Window lifecycle -------------------------------------------------------
-static TextLayer* setup_text_layer(Layer* root, GRect bounds, const char* text, GFont font) {
+static TextLayer *setup_text_layer(Layer *root, GRect bounds, const char *text, GFont font) {
     TextLayer *layer = text_layer_create(bounds);
     if (text) text_layer_set_text(layer, text);
     text_layer_set_font(layer, font);
