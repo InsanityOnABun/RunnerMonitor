@@ -21,8 +21,8 @@ static GFont      s_font_small;
 
 static char s_time_buf[12];
 static char s_date_buf[20];
-static char s_steps_buf[20];
-static char s_battery_buf[22];
+static char s_steps_buf[14];
+static char s_battery_buf[24];
 static char s_signal_buf[18];
 
 static int  s_battery = 100;
@@ -103,7 +103,12 @@ static void update_signal(void) {
 }
 
 // Weather update
-static void update_weather(void) {}
+static void update_weather(void) {
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
+    app_message_outbox_send();
+}
 
 // Time and date update
 static void update_time(void) {
@@ -118,11 +123,15 @@ static void update_time(void) {
 }
 
 // Steps update
-static void update_steps(void) {}
+static void update_steps(void) {
+    s_steps = health_service_sum_today(HealthMetricStepCount);
+    snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - %d", s_steps);
+    text_layer_set_text(s_steps_layer, s_steps_buf);
+}
 
 // Battery update
 static void update_battery(void) {
-    snprintf(s_battery_buf, sizeof(s_battery_buf), "SHELL INTEGRITY %d%%", s_battery);
+    snprintf(s_battery_buf, sizeof(s_battery_buf), "SHELL INTEGRITY - %d%%", s_battery);
     text_layer_set_text(s_battery_layer, s_battery_buf);
 }
 
@@ -130,6 +139,12 @@ static void update_battery(void) {
 
 static void tick_handler(struct tm *tick_time, TimeUnits changed) {
     update_time();
+    update_steps();
+    
+    // Get weather update every 30 minutes
+    if (tick_time->tm_min % 30 == 0) {
+        update_weather();
+    }
 }
 
 static void battery_handler(BatteryChargeState state) {
@@ -146,6 +161,19 @@ static void bt_handler(bool connected) {
 }
 
 static void inbox_received_handler(DictionaryIterator *iterator, void *context) {
+    Tuple *temp_tuple = dict_find(iterator, MESSAGE_KEY_TEMPERATURE);
+    Tuple *conditions_tuple = dict_find(iterator, MESSAGE_KEY_CONDITIONS);
+
+    if (temp_tuple && conditions_tuple) {
+        static char temperature_buffer[8];
+        static char conditions_buffer[32];
+        static char weather_layer_buffer[42];
+
+        snprintf(temperature_buffer, sizeof(temperature_buffer), "%d°F", (int)temp_tuple->value->int32);
+        snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions_tuple->value->cstring);
+        snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s %s", temperature_buffer, conditions_buffer);
+        text_layer_set_text(s_weather_layer, weather_layer_buffer);
+    }
 }
 
 static void inbox_dropped_handler(AppMessageResult reason, void *context) {

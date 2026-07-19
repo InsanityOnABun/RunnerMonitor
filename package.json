@@ -4,9 +4,17 @@
     "keywords": [],
     "name": "runner-monitor",
     "pebble": {
+        "capabilities": [
+            "location",
+            "health"
+        ],
         "displayName": "RUNNER // MONITOR",
         "enableMultiJS": true,
-        "messageKeys": [],
+        "messageKeys": [
+            "TEMPERATURE",
+            "CONDITIONS",
+            "REQUEST_WEATHER"
+        ],
         "projectType": "native",
         "resources": {
             "media": [
