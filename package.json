@@ -1,11 +1,14 @@
 {
     "author": "charles@rosaaen.dev",
-    "dependencies": {},
+    "dependencies": {
+        "@rebble/clay": "^1.0.10"
+    },
     "keywords": [],
     "name": "runner-monitor",
     "pebble": {
         "capabilities": [
             "location",
+            "configurable",
             "health"
         ],
         "displayName": "RUNNER // MONITOR",
@@ -14,7 +17,11 @@
             "TEMPERATURE",
             "CONDITIONS",
             "REQUEST_WEATHER",
-            "CITY"
+            "CITY",
+            "showCity",
+            "showWeather",
+            "topText",
+            "useFahrenheit"
         ],
         "projectType": "native",
         "resources": {

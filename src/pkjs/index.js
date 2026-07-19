@@ -1,3 +1,7 @@
+var Clay = require('@rebble/clay');
+var clayConfig = require('./config');
+var clay = new Clay(clayConfig);
+
 function weatherCodeToCondition(code) {
     if (code === 0) return 'Clear';
     if (code <= 3) return 'Cloudy';
@@ -35,7 +39,7 @@ function locationSuccess(pos) {
     xhrCity.send();
 
     var weatherJson = JSON.parse(xhrWeather.responseText);
-    var temperature = Math.round(weatherJson.current.temperature_2m * 1.8 + 32);
+    var temperature = Math.round(weatherJson.current.temperature_2m);
     var conditions = weatherCodeToCondition(weatherJson.current.weather_code);
     
     var city = JSON.parse(xhrCity.responseText).city;

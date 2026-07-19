@@ -7,6 +7,18 @@
 #define COLOR_DIM    GColorWhite
 #define COLOR_VOID   GColorBlack
 
+#define SETTINGS_KEY 1
+
+typedef struct ClaySettings {
+    bool showCity;
+    bool showWeather;
+    bool useFahrenheit;
+    char* topText;
+} ClaySettings;
+
+static ClaySettings settings;
+
+
 static Window    *s_window;
 static Layer     *s_canvas_layer;
 static TextLayer *s_top_layer;
@@ -28,6 +40,23 @@ static char s_signal_buf[18];
 static int  s_battery = 100;
 static int  s_steps = 0;
 static bool s_signal = true;
+
+// --- Settings ---------------------------------------------------------------
+static void prv_default_settings() {
+    settings.showCity = true;
+    settings.showWeather = true;
+    settings.useFahrenheit = true;
+    settings.topText = "RUNNER // MONITOR";
+}
+
+static void prv_save_settings() {
+    persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
+}
+
+static void prv_load_settings() {
+    prv_default_settings();
+    persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
+}
 
 // --- Rendering --------------------------------------------------------------
 static void canvas_update_proc(Layer *layer, GContext *ctx) {
@@ -140,7 +169,7 @@ static void update_battery(void) {
 static void tick_handler(struct tm *tick_time, TimeUnits changed) {
     update_time();
     update_steps();
-    
+
     // Get weather update every 30 minutes
     if (tick_time->tm_min % 30 == 0) {
         update_weather();
@@ -161,26 +190,50 @@ static void bt_handler(bool connected) {
 }
 
 static void inbox_received_handler(DictionaryIterator *iterator, void *context) {
+    Tuple *showCity_tuple = dict_find(iterator, MESSAGE_KEY_showCity);
+    Tuple *showWeather_tuple = dict_find(iterator, MESSAGE_KEY_showWeather);
+    Tuple *useFahrenheit_tuple = dict_find(iterator, MESSAGE_KEY_useFahrenheit);
+    Tuple *topText_tuple = dict_find(iterator, MESSAGE_KEY_topText);
+    
+    if (showCity_tuple) settings.showCity = showCity_tuple->value->int32 == 1;
+    if (showWeather_tuple) settings.showWeather = showWeather_tuple->value->int32 == 1;
+    if (useFahrenheit_tuple) settings.useFahrenheit = useFahrenheit_tuple->value->int32 == 1;
+    if (topText_tuple) settings.topText = topText_tuple->value->cstring;
+    
+    prv_save_settings();
+    
+    if (topText_tuple) text_layer_set_text(s_top_layer, settings.topText);
+    
     Tuple *city_tuple = dict_find(iterator, MESSAGE_KEY_CITY);
     Tuple *temp_tuple = dict_find(iterator, MESSAGE_KEY_TEMPERATURE);
     Tuple *conditions_tuple = dict_find(iterator, MESSAGE_KEY_CONDITIONS);
-    
-    if (city_tuple) {
+
+    if (settings.showCity && city_tuple) {
         static char city_buffer[20];
         snprintf(city_buffer, sizeof(city_buffer), "%s", city_tuple->value->cstring);
         text_layer_set_text(s_signal_layer, city_buffer);
+    } else {
+        text_layer_set_text(s_signal_layer, "TAU CETI IV");
     }
 
-    if (temp_tuple && conditions_tuple) {
+    if (settings.showWeather && temp_tuple && conditions_tuple) {
         static char temperature_buffer[8];
         static char conditions_buffer[32];
         static char weather_layer_buffer[42];
+        
+        int t = (int)temp_tuple->value->int32;
+        if (settings.useFahrenheit) t = t * 1.8 + 32;
+        char *tLabel = settings.useFahrenheit ? "F" : "C";
 
-        snprintf(temperature_buffer, sizeof(temperature_buffer), "%d°F", (int)temp_tuple->value->int32);
+        snprintf(temperature_buffer, sizeof(temperature_buffer), "%d° %s", (int)temp_tuple->value->int32, tLabel);
         snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions_tuple->value->cstring);
         snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s %s", temperature_buffer, conditions_buffer);
         text_layer_set_text(s_weather_layer, weather_layer_buffer);
+    } else {
+        text_layer_set_text(s_weather_layer, "ATMOSPHERE // NOT FOUND");
     }
+    
+    if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple) update_weather();
 }
 
 static void inbox_dropped_handler(AppMessageResult reason, void *context) {
@@ -217,15 +270,15 @@ static void window_load(Window *window) {
     s_canvas_layer = layer_create(bounds);
     layer_set_update_proc(s_canvas_layer, canvas_update_proc);
     layer_add_child(root, s_canvas_layer);
-    
-    s_top_layer = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), "RUNNER // MONITOR", s_font_small);
+
+    s_top_layer = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), settings.topText, s_font_small);
     s_signal_layer = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
     s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), "!! CONDITIONS UNKNOWN !!", s_font_small);
     s_time_layer = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
     s_date_layer = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
     s_steps_layer = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), "STEPS - 0", s_font_small);
     s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
-    
+
     s_battery = battery_state_service_peek().charge_percent;
     s_signal = connection_service_peek_pebble_app_connection();
     light_set_color_rgb888(0xC2FE0B);
@@ -249,6 +302,7 @@ static void window_unload(Window *window) {
 }
 
 static void init(void) {
+    prv_load_settings();
     s_window = window_create();
     window_set_background_color(s_window, COLOR_VOID);
     window_set_window_handlers(s_window, (WindowHandlers){
@@ -260,14 +314,14 @@ static void init(void) {
     tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
     battery_state_service_subscribe(battery_handler);
     connection_service_subscribe((ConnectionHandlers){.pebble_app_connection_handler = bt_handler});
-    
+
     app_message_register_inbox_received(inbox_received_handler);
     app_message_register_inbox_dropped(inbox_dropped_handler);
     app_message_register_outbox_failed(outbox_failed_handler);
     app_message_register_outbox_sent(outbox_sent_handler);
-    
-    const int inbox_size = 128;
-    const int outbox_size = 128;
+
+    const int inbox_size = 256;
+    const int outbox_size = 256;
     app_message_open(inbox_size, outbox_size);
 }
 
