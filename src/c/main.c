@@ -8,6 +8,7 @@
 #define COLOR_VOID   GColorBlack
 
 #define SETTINGS_KEY 1
+#define TOPTEXT_KEY 2   // separate persist key for the string
 
 typedef struct ClaySettings {
     bool showCity;
@@ -31,11 +32,15 @@ static TextLayer *s_battery_layer;
 static GFont      s_font_big;
 static GFont      s_font_small;
 
+static char s_top_buf[25];
+static char s_signal_buf[18];
+static char s_temperature_buf[8];
+static char s_conditions_buf[32];
+static char s_weather_layer_buf[42];
 static char s_time_buf[12];
 static char s_date_buf[20];
 static char s_steps_buf[14];
 static char s_battery_buf[24];
-static char s_signal_buf[18];
 
 static int  s_battery = 100;
 static int  s_steps = 0;
@@ -51,11 +56,16 @@ static void prv_default_settings() {
 
 static void prv_save_settings() {
     persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
+    persist_write_string(TOPTEXT_KEY, s_top_buf);
 }
 
 static void prv_load_settings() {
     prv_default_settings();
     persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
+    if (persist_exists(TOPTEXT_KEY)) {
+        persist_read_string(TOPTEXT_KEY, s_top_buf, sizeof(s_top_buf));
+    }
+    settings.topText = s_top_buf;
 }
 
 // --- Rendering --------------------------------------------------------------
@@ -194,44 +204,44 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     Tuple *showWeather_tuple = dict_find(iterator, MESSAGE_KEY_showWeather);
     Tuple *useFahrenheit_tuple = dict_find(iterator, MESSAGE_KEY_useFahrenheit);
     Tuple *topText_tuple = dict_find(iterator, MESSAGE_KEY_topText);
-    
+
     if (showCity_tuple) settings.showCity = showCity_tuple->value->int32 == 1;
     if (showWeather_tuple) settings.showWeather = showWeather_tuple->value->int32 == 1;
     if (useFahrenheit_tuple) settings.useFahrenheit = useFahrenheit_tuple->value->int32 == 1;
-    if (topText_tuple) settings.topText = topText_tuple->value->cstring;
-    
+    if (topText_tuple) {
+        snprintf(s_top_buf, sizeof(s_top_buf), "%s",topText_tuple->value->cstring);
+        settings.topText = s_top_buf;
+    }
+
     prv_save_settings();
-    
+
     if (topText_tuple) text_layer_set_text(s_top_layer, settings.topText);
-    
+
     Tuple *city_tuple = dict_find(iterator, MESSAGE_KEY_CITY);
     Tuple *temp_tuple = dict_find(iterator, MESSAGE_KEY_TEMPERATURE);
     Tuple *conditions_tuple = dict_find(iterator, MESSAGE_KEY_CONDITIONS);
 
     if (settings.showCity && city_tuple) {
-        static char city_buffer[20];
-        snprintf(city_buffer, sizeof(city_buffer), "%s", city_tuple->value->cstring);
-        text_layer_set_text(s_signal_layer, city_buffer);
+        snprintf(s_signal_buf, sizeof(s_signal_buf), "%s", city_tuple->value->cstring);
+        text_layer_set_text(s_signal_layer, s_signal_buf);
     } else {
         text_layer_set_text(s_signal_layer, "TAU CETI IV");
     }
 
     if (settings.showWeather && temp_tuple && conditions_tuple) {
-        static char temperature_buffer[8];
-        static char conditions_buffer[32];
-        static char weather_layer_buffer[42];
-        
+
+
         int t = settings.useFahrenheit ? (int)temp_tuple->value->int32 * 1.8 + 32 : (int)temp_tuple->value->int32;
         char *tLabel = settings.useFahrenheit ? "F" : "C";
 
-        snprintf(temperature_buffer, sizeof(temperature_buffer), "%d° %s", t, tLabel);
-        snprintf(conditions_buffer, sizeof(conditions_buffer), "%s", conditions_tuple->value->cstring);
-        snprintf(weather_layer_buffer, sizeof(weather_layer_buffer), "%s - %s", temperature_buffer, conditions_buffer);
-        text_layer_set_text(s_weather_layer, weather_layer_buffer);
+        snprintf(s_temperature_buf, sizeof(s_temperature_buf), "%d° %s", t, tLabel);
+        snprintf(s_conditions_buf, sizeof(s_conditions_buf), "%s", conditions_tuple->value->cstring);
+        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "%s - %s", s_temperature_buf, s_conditions_buf);
+        text_layer_set_text(s_weather_layer, s_weather_layer_buf);
     } else {
         text_layer_set_text(s_weather_layer, "ATMOSPHERE // NOT FOUND");
     }
-    
+
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple) update_weather();
 }
 

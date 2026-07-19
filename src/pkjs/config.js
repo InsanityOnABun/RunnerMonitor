@@ -47,7 +47,8 @@ module.exports = [
                 "label": "Text to show at the top of the watchface",
                 "defaultValue": "RUNNER // MONITOR",
                 "attributes":  {
-                    "placeholder": "RUNNER // MONITOR"
+                    "placeholder": "RUNNER // MONITOR",
+                    "limit": 25
                 }
             }
         ]
