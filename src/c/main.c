@@ -189,13 +189,15 @@ static void outbox_sent_handler(DictionaryIterator *iterator, void *context) {
 }
 
 // --- Window lifecycle -------------------------------------------------------
-static void setup_text_layer(TextLayer* layer, GRect bounds, char* text, GFont font) {
-    layer = text_layer_create(bounds);
-    if (text != NULL) text_layer_set_text(layer, text);
+static TextLayer* setup_text_layer(Layer* root, GRect bounds, const char* text, GFont font) {
+    TextLayer *layer = text_layer_create(bounds);
+    if (text) text_layer_set_text(layer, text);
     text_layer_set_font(layer, font);
     text_layer_set_text_color(layer, COLOR_ACID);
     text_layer_set_background_color(layer, GColorClear);
     text_layer_set_text_alignment(layer, GTextAlignmentCenter);
+    layer_add_child(root, text_layer_get_layer(layer));
+    return layer;
 }
 
 static void window_load(Window *window) {
@@ -208,34 +210,14 @@ static void window_load(Window *window) {
     s_canvas_layer = layer_create(bounds);
     layer_set_update_proc(s_canvas_layer, canvas_update_proc);
     layer_add_child(root, s_canvas_layer);
-
-    // Header
-    setup_text_layer(s_top_layer, GRect(0, 22, bounds.size.w, 20), "RUNNER // MONITOR", s_font_small);
-    layer_add_child(root, text_layer_get_layer(s_top_layer));
-        
-    // Signal
-    setup_text_layer(s_signal_layer, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
-    layer_add_child(root, text_layer_get_layer(s_signal_layer));
-        
-    // Weather
-    setup_text_layer(s_weather_layer, GRect(0, 62, bounds.size.w, 20), "!! CONDITIONS UNKNOWN !!", s_font_small);
-    layer_add_child(root, text_layer_get_layer(s_weather_layer));
-
-    // Time
-    setup_text_layer(s_time_layer, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
-    layer_add_child(root, text_layer_get_layer(s_time_layer));
-
-    // Date
-    setup_text_layer(s_date_layer, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
-    layer_add_child(root, text_layer_get_layer(s_date_layer));
-        
-    // Steps
-    setup_text_layer(s_steps_layer, GRect(0, bounds.size.h - 58, bounds.size.w, 20), "STEPS - 0", s_font_small);
-    layer_add_child(root, text_layer_get_layer(s_steps_layer));
-
-    // Battery
-    setup_text_layer(s_battery_layer, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
-    layer_add_child(root, text_layer_get_layer(s_battery_layer));
+    
+    s_top_layer = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), "RUNNER // MONITOR", s_font_small);
+    s_signal_layer = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
+    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), "!! CONDITIONS UNKNOWN !!", s_font_small);
+    s_time_layer = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
+    s_date_layer = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
+    s_steps_layer = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), "STEPS - 0", s_font_small);
+    s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
     
     s_battery = battery_state_service_peek().charge_percent;
     s_signal = connection_service_peek_pebble_app_connection();
