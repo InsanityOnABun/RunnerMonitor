@@ -7,14 +7,13 @@
 #define COLOR_DIM    GColorWhite
 #define COLOR_VOID   GColorBlack
 
-#define SETTINGS_KEY 1
-#define TOPTEXT_KEY 2   // separate persist key for the string
+#define SETTINGS_KEY 3
 
 typedef struct ClaySettings {
     bool showCity;
     bool showWeather;
     bool useFahrenheit;
-    char *topText;
+    char topText[26];
 } ClaySettings;
 
 static ClaySettings settings;
@@ -32,9 +31,8 @@ static TextLayer *s_battery_layer;
 static GFont      s_font_big;
 static GFont      s_font_small;
 
-static char s_top_buf[26];
-static char s_signal_buf[18];
-static char s_temperature_buf[8];
+static char s_signal_buf[24];
+static char s_temperature_buf[12];
 static char s_conditions_buf[32];
 static char s_weather_layer_buf[42];
 static char s_time_buf[12];
@@ -51,21 +49,16 @@ static void prv_default_settings() {
     settings.showCity = true;
     settings.showWeather = true;
     settings.useFahrenheit = true;
-    settings.topText = "RUNNER // MONITOR";
+    snprintf(settings.topText, sizeof(settings.topText), "RUNNER // MONITOR");
 }
 
 static void prv_save_settings() {
     persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
-    persist_write_string(TOPTEXT_KEY, s_top_buf);
 }
 
 static void prv_load_settings() {
     prv_default_settings();
     persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
-    if (persist_exists(TOPTEXT_KEY)) {
-        persist_read_string(TOPTEXT_KEY, s_top_buf, sizeof(s_top_buf));
-    }
-    settings.topText = s_top_buf;
 }
 
 // --- Rendering --------------------------------------------------------------
@@ -114,11 +107,8 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     int lit = (s_battery + 9) / 10;
     for (int i = 0; i < 10; i++) {
         GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
-        if (i < lit) {
-            graphics_fill_rect(ctx, seg, 0, GCornerNone);
-        } else {
-            graphics_draw_rect(ctx, seg);
-        }
+        if (i < lit) graphics_fill_rect(ctx, seg, 0, GCornerNone);
+        else graphics_draw_rect(ctx, seg);
     }
 }
 
@@ -144,11 +134,11 @@ static void update_signal(void) {
 // Weather update
 static void update_weather(void) {
     DictionaryIterator *iter;
-    if (app_message_outbox_begin(&iter) == APP_MSG_OK) {
-        app_message_outbox_begin(&iter);
+    AppMessageResult result = app_message_outbox_begin(&iter);
+    if (result == APP_MSG_OK) {
         dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
         app_message_outbox_send();
-    }
+    } else APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox unavailable: %d", (int)result);
 }
 
 // Time and date update
@@ -165,10 +155,21 @@ static void update_time(void) {
 
 // Steps update
 static void update_steps(void) {
-    s_steps = health_service_sum_today(HealthMetricStepCount);
-    snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - %d", s_steps);
+    time_t start = time_start_of_today();
+    time_t end = time(NULL);
+    HealthServiceAccessibilityMask mask =
+        health_service_metric_accessible(HealthMetricStepCount, start, end);
+
+    if (mask & HealthServiceAccessibilityMaskAvailable) {
+        s_steps = (int) health_service_sum_today(HealthMetricStepCount);
+        snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - %d", s_steps);
+    } else {
+        // Distinguishable failure state, fits the HUD voice
+        snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - N/A");
+    }
     text_layer_set_text(s_steps_layer, s_steps_buf);
 }
+
 
 // Battery update
 static void update_battery(void) {
@@ -183,9 +184,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits changed) {
     update_steps();
 
     // Get weather update every 30 minutes
-    if (tick_time->tm_min % 30 == 0) {
-        update_weather();
-    }
+    if (tick_time->tm_min % 30 == 0) update_weather();
 }
 
 static void battery_handler(BatteryChargeState state) {
@@ -195,9 +194,11 @@ static void battery_handler(BatteryChargeState state) {
 }
 
 static void bt_handler(bool connected) {
-    if (connected != s_signal) vibes_double_pulse();
+    bool prev = s_signal;
+    if (connected != prev) vibes_double_pulse();
     s_signal = connected;
     update_signal();
+    if (connected && !prev) update_weather();
     layer_mark_dirty(s_canvas_layer);
 }
 
@@ -210,12 +211,10 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     if (showCity_tuple) settings.showCity = showCity_tuple->value->int32 == 1;
     if (showWeather_tuple) settings.showWeather = showWeather_tuple->value->int32 == 1;
     if (useFahrenheit_tuple) settings.useFahrenheit = useFahrenheit_tuple->value->int32 == 1;
-    if (topText_tuple) {
-        snprintf(s_top_buf, sizeof(s_top_buf), "%s",topText_tuple->value->cstring);
-        settings.topText = s_top_buf;
-    }
+    if (topText_tuple) snprintf(settings.topText, sizeof(settings.topText), "%s",topText_tuple->value->cstring);
 
-    prv_save_settings();
+    if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple || topText_tuple) prv_save_settings();
+
 
     if (topText_tuple) text_layer_set_text(s_top_layer, settings.topText);
 
@@ -226,13 +225,9 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     if (settings.showCity && city_tuple) {
         snprintf(s_signal_buf, sizeof(s_signal_buf), "%s", city_tuple->value->cstring);
         text_layer_set_text(s_signal_layer, s_signal_buf);
-    } else {
-        text_layer_set_text(s_signal_layer, "TAU CETI IV");
-    }
+    } else text_layer_set_text(s_signal_layer, "TAU CETI IV");
 
     if (settings.showWeather && temp_tuple && conditions_tuple) {
-
-
         int t = settings.useFahrenheit ? (int)temp_tuple->value->int32 * 1.8 + 32 : (int)temp_tuple->value->int32;
         char *tLabel = settings.useFahrenheit ? "F" : "C";
 
@@ -240,9 +235,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         snprintf(s_conditions_buf, sizeof(s_conditions_buf), "%s", conditions_tuple->value->cstring);
         snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "%s - %s", s_temperature_buf, s_conditions_buf);
         text_layer_set_text(s_weather_layer, s_weather_layer_buf);
-    } else {
-        text_layer_set_text(s_weather_layer, "ATMOSPHERE // NOT FOUND");
-    }
+    } else text_layer_set_text(s_weather_layer, "ATMOSPHERE // NOT FOUND");
 
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple) update_weather();
 }
@@ -292,7 +285,6 @@ static void window_load(Window *window) {
 
     s_battery = battery_state_service_peek().charge_percent;
     s_signal = connection_service_peek_pebble_app_connection();
-    light_set_color_rgb888(0xC2FE0B);
 
     update_time();
     update_steps();
@@ -338,6 +330,7 @@ static void init(void) {
 }
 
 static void deinit(void) {
+    app_message_deregister_callbacks();
     tick_timer_service_unsubscribe();
     battery_state_service_unsubscribe();
     connection_service_unsubscribe();
