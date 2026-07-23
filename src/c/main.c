@@ -32,14 +32,14 @@ static TextLayer *s_battery_layer;
 static GFont      s_font_big;
 static GFont      s_font_small;
 
-static char s_top_buf[25];
+static char s_top_buf[26];
 static char s_signal_buf[18];
 static char s_temperature_buf[8];
 static char s_conditions_buf[32];
 static char s_weather_layer_buf[42];
 static char s_time_buf[12];
 static char s_date_buf[20];
-static char s_steps_buf[14];
+static char s_steps_buf[16];
 static char s_battery_buf[24];
 
 static int  s_battery = 100;
@@ -144,9 +144,11 @@ static void update_signal(void) {
 // Weather update
 static void update_weather(void) {
     DictionaryIterator *iter;
-    app_message_outbox_begin(&iter);
-    dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
-    app_message_outbox_send();
+    if (app_message_outbox_begin(&iter) == APP_MSG_OK) {
+        app_message_outbox_begin(&iter);
+        dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
+        app_message_outbox_send();
+    }
 }
 
 // Time and date update
@@ -293,6 +295,7 @@ static void window_load(Window *window) {
     light_set_color_rgb888(0xC2FE0B);
 
     update_time();
+    update_steps();
     update_battery();
     update_signal();
 }
