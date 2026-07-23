@@ -164,7 +164,6 @@ static void update_steps(void) {
         s_steps = (int) health_service_sum_today(HealthMetricStepCount);
         snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - %d", s_steps);
     } else {
-        // Distinguishable failure state, fits the HUD voice
         snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - N/A");
     }
     text_layer_set_text(s_steps_layer, s_steps_buf);
