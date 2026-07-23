@@ -128,6 +128,8 @@ static void update_signal(void) {
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
         light_set_color_rgb888(0xEA027E);
     }
+    snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "ATMO // NOT FOUND");
+    text_layer_set_text(s_weather_layer, s_weather_layer_buf);
     text_layer_set_text(s_signal_layer, s_signal_buf);
 }
 
@@ -234,7 +236,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         snprintf(s_conditions_buf, sizeof(s_conditions_buf), "%s", conditions_tuple->value->cstring);
         snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "%s - %s", s_temperature_buf, s_conditions_buf);
         text_layer_set_text(s_weather_layer, s_weather_layer_buf);
-    } else text_layer_set_text(s_weather_layer, "ATMOSPHERE // NOT FOUND");
+    } else text_layer_set_text(s_weather_layer, "ATMO // NOT FOUND");
 
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple) update_weather();
 }
@@ -276,7 +278,7 @@ static void window_load(Window *window) {
 
     s_top_layer = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), settings.topText, s_font_small);
     s_signal_layer = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
-    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), "!! CONDITIONS UNKNOWN !!", s_font_small);
+    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), "ATMO // NOT FOUND", s_font_small);
     s_time_layer = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
     s_date_layer = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
     s_steps_layer = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), "STEPS - 0", s_font_small);
