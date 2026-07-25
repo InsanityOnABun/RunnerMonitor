@@ -128,7 +128,7 @@ static void update_signal(void) {
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
         light_set_color_rgb888(0xEA027E);
     }
-    snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "ATMO // NOT FOUND");
+    snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "!! ATMO UNKNOWN !!");
     text_layer_set_text(s_weather_layer, s_weather_layer_buf);
     text_layer_set_text(s_signal_layer, s_signal_buf);
 }
@@ -278,7 +278,7 @@ static void window_load(Window *window) {
 
     s_top_layer = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), settings.topText, s_font_small);
     s_signal_layer = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
-    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), "ATMO // NOT FOUND", s_font_small);
+    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), "!! ATMO UNKNOWN !!", s_font_small);
     s_time_layer = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
     s_date_layer = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
     s_steps_layer = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), "STEPS - 0", s_font_small);
