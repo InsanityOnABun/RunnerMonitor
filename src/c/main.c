@@ -212,7 +212,10 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     if (showCity_tuple) settings.showCity = showCity_tuple->value->int32 == 1;
     if (showWeather_tuple) settings.showWeather = showWeather_tuple->value->int32 == 1;
     if (useFahrenheit_tuple) settings.useFahrenheit = useFahrenheit_tuple->value->int32 == 1;
-    if (topText_tuple) snprintf(settings.topText, sizeof(settings.topText), "%s",topText_tuple->value->cstring);
+    if (topText_tuple) {
+        if (topText_tuple->value->cstring[0]) snprintf(settings.topText, sizeof(settings.topText), "%s", topText_tuple->value->cstring);
+        else snprintf(settings.topText, sizeof(settings.topText), "%s", "RUNNER // MONITOR");
+    }
 
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple || topText_tuple) prv_save_settings();
 
