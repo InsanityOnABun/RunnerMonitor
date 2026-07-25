@@ -236,7 +236,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         snprintf(s_conditions_buf, sizeof(s_conditions_buf), "%s", conditions_tuple->value->cstring);
         snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "%s - %s", s_temperature_buf, s_conditions_buf);
         text_layer_set_text(s_weather_layer, s_weather_layer_buf);
-    } else text_layer_set_text(s_weather_layer, "ATMO // NOT FOUND");
+    } else text_layer_set_text(s_weather_layer, "!! ATMO UNKNOWN !!");
 
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple) update_weather();
 }
