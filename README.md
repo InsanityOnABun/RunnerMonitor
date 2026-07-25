@@ -5,3 +5,4 @@ TODO:
 - Quiet time indicator
 - Charging indicator
 - Audio mute indicator, maybe
+- Round watch border styling, maybe
