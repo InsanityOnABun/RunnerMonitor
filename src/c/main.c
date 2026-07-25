@@ -7,7 +7,7 @@
 #define COLOR_DIM    GColorWhite
 #define COLOR_VOID   GColorBlack
 
-#define SETTINGS_KEY 3
+#define SETTINGS_KEY 1
 
 typedef struct ClaySettings {
     bool showCity;
