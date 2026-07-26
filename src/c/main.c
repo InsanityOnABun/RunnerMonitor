@@ -40,20 +40,27 @@ static char s_date_buf[20];
 static char s_steps_buf[16];
 static char s_battery_buf[24];
 
-static int  s_battery = 100;
-static int  s_steps = 0;
-static bool s_signal = true;
+static int  s_battery;
+static int  s_steps;
+
+static bool s_signal;
+static bool s_charging;
+static bool s_plugged;
+static bool s_quiet;
 
 static const char TEXT_HEADER_DEFAULT[] = "RUNNER // MONITOR";
+static const char TEXT_QUIET[]          = "SILENT RUNNING";
 static const char TEXT_SIGNAL_OK[]      = "TAU CETI IV";
 static const char TEXT_SIGNAL_LOST[]    = "!! SIGNAL LOST !!";
 static const char TEXT_ATMO_UNKNOWN[]   = "!! ATMO UNKNOWN !!";
+static const char TEXT_BATTERY_MAX[]    = "SHELL INTEGRITY MAX";
 static const char TEXT_STEPS_NA[]       = "STEPS - N/A";
 static const char TEXT_UNIT_F[]         = "F";
 static const char TEXT_UNIT_C[]         = "C";
 
 static const char FMT_STEPS[]           = "STEPS - %d";
 static const char FMT_BATTERY[]         = "SHELL INTEGRITY - %d%%";
+static const char FMT_BATTERY_REPAIR[]  = "SHELL REPAIRING - %d%%";
 static const char FMT_TEMPERATURE[]     = "%d° %s";
 static const char FMT_WEATHER[]         = "%s - %s";
 static const char FMT_TIME_24H[]        = "%H:%M";
@@ -129,6 +136,11 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
 }
 
 // --- State updates ----------------------------------------------------------
+// Top header update
+static void update_top_header(void) {
+    text_layer_set_text(s_top_layer, s_quiet ? TEXT_QUIET : settings.topText);
+}
+
 // Signal update
 static void update_signal(void) {
     if (s_signal) {
@@ -188,15 +200,28 @@ static void update_steps(void) {
 
 // Battery update
 static void update_battery(void) {
-    snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY, s_battery);
-    text_layer_set_text(s_battery_layer, s_battery_buf);
+    if (s_charging) {
+        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY_REPAIR, s_battery);
+        text_layer_set_text(s_battery_layer, s_battery_buf);
+    } else if (s_plugged) {
+        text_layer_set_text(s_battery_layer, TEXT_BATTERY_MAX);
+    } else {
+        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY, s_battery);
+        text_layer_set_text(s_battery_layer, s_battery_buf);
+    }
 }
+
 
 // --- Event handlers ---------------------------------------------------------
 
 static void tick_handler(struct tm *tick_time, TimeUnits changed) {
     update_time();
     update_steps();
+    
+    if (quiet_time_is_active() != s_quiet) {
+        s_quiet = !s_quiet;
+        update_top_header();
+    }
 
     // Get weather update every 30 minutes
     if (tick_time->tm_min % 30 == 0) update_weather();
@@ -204,13 +229,15 @@ static void tick_handler(struct tm *tick_time, TimeUnits changed) {
 
 static void battery_handler(BatteryChargeState state) {
     s_battery = state.charge_percent;
+    s_charging = state.is_charging;
+    s_plugged  = state.is_plugged;
     update_battery();
     layer_mark_dirty(s_canvas_layer);
 }
 
 static void bt_handler(bool connected) {
     bool prev = s_signal;
-    if (connected != prev) vibes_double_pulse();
+    if (connected != prev && !quiet_time_is_active()) vibes_double_pulse();
     s_signal = connected;
     update_signal();
     if (connected && !prev) update_weather();
@@ -229,12 +256,10 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     if (topText_tuple) {
         if (topText_tuple->value->cstring[0]) snprintf(settings.topText, sizeof(settings.topText), "%s", topText_tuple->value->cstring);
         else snprintf(settings.topText, sizeof(settings.topText), "%s", TEXT_HEADER_DEFAULT);
+        update_top_header();
     }
 
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple || topText_tuple) prv_save_settings();
-
-
-    if (topText_tuple) text_layer_set_text(s_top_layer, settings.topText);
 
     Tuple *city_tuple = dict_find(iterator, MESSAGE_KEY_CITY);
     Tuple *temp_tuple = dict_find(iterator, MESSAGE_KEY_TEMPERATURE);
@@ -301,13 +326,19 @@ static void window_load(Window *window) {
     s_steps_layer = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), TEXT_STEPS_NA, s_font_small);
     s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
 
-    s_battery = battery_state_service_peek().charge_percent;
+    BatteryChargeState charge_state = battery_state_service_peek();
+    s_battery  = charge_state.charge_percent;
+    s_charging = charge_state.is_charging;
+    s_plugged  = charge_state.is_plugged;
+    
     s_signal = connection_service_peek_pebble_app_connection();
+    s_quiet  = quiet_time_is_active();
 
     update_time();
     update_steps();
     update_battery();
     update_signal();
+    update_top_header();
 }
 
 static void window_unload(Window *window) {
