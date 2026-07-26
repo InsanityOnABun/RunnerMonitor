@@ -308,7 +308,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
 
     if (settings.showWeather && temp_tuple && conditions_tuple) {
         int t = settings.useFahrenheit
-            ? (int) temp_tuple->value->int32 * 1.8 + 32
+            ? (int) temp_tuple->value->int32 * 9 / 5 + 32
             : (int) temp_tuple->value->int32;
         const char *tLabel = settings.useFahrenheit ? TEXT_UNIT_F : TEXT_UNIT_C;
 
@@ -381,6 +381,7 @@ static void window_load(Window *window) {
     update_battery();
     update_signal();
     update_top_header();
+    update_weather();
 }
 
 static void window_unload(Window *window) {
