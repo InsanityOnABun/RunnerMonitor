@@ -1,6 +1,6 @@
 #include <pebble.h>
 
-// --- Globals -------------------------------------------------------
+// --- Globals ----------------------------------------------------------------
 // Acid yellow-green on void black; magenta for Runner alert states.
 #define COLOR_ACID   PBL_IF_COLOR_ELSE(GColorSpringBud, GColorWhite)
 #define COLOR_ALERT  PBL_IF_COLOR_ELSE(GColorFolly,   GColorWhite)
