@@ -1,6 +1,6 @@
 #include <pebble.h>
 
-// --- MARATHON palette -------------------------------------------------------
+// --- Globals -------------------------------------------------------
 // Acid yellow-green on void black; magenta for Runner alert states.
 #define COLOR_ACID   PBL_IF_COLOR_ELSE(GColorSpringBud, GColorWhite)
 #define COLOR_ALERT  PBL_IF_COLOR_ELSE(GColorFolly,   GColorWhite)
@@ -44,12 +44,28 @@ static int  s_battery = 100;
 static int  s_steps = 0;
 static bool s_signal = true;
 
+static const char TEXT_HEADER_DEFAULT[] = "RUNNER // MONITOR";
+static const char TEXT_SIGNAL_OK[]      = "TAU CETI IV";
+static const char TEXT_SIGNAL_LOST[]    = "!! SIGNAL LOST !!";
+static const char TEXT_ATMO_UNKNOWN[]   = "!! ATMO UNKNOWN !!";
+static const char TEXT_STEPS_NA[]       = "STEPS - N/A";
+static const char TEXT_UNIT_F[]         = "F";
+static const char TEXT_UNIT_C[]         = "C";
+
+static const char FMT_STEPS[]           = "STEPS - %d";
+static const char FMT_BATTERY[]         = "SHELL INTEGRITY - %d%%";
+static const char FMT_TEMPERATURE[]     = "%d° %s";
+static const char FMT_WEATHER[]         = "%s - %s";
+static const char FMT_TIME_24H[]        = "%H:%M";
+static const char FMT_TIME_12H[]        = "%I:%M %p";
+static const char FMT_DATE[]            = "%a - %b %d %Y";
+
 // --- Settings ---------------------------------------------------------------
 static void prv_default_settings() {
     settings.showCity = true;
     settings.showWeather = true;
     settings.useFahrenheit = true;
-    snprintf(settings.topText, sizeof(settings.topText), "RUNNER // MONITOR");
+    snprintf(settings.topText, sizeof(settings.topText), "%s", TEXT_HEADER_DEFAULT);
 }
 
 static void prv_save_settings() {
@@ -116,21 +132,19 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
 // Signal update
 static void update_signal(void) {
     if (s_signal) {
-        snprintf(s_signal_buf, sizeof(s_signal_buf), "TAU CETI IV");
+        text_layer_set_text(s_signal_layer, TEXT_SIGNAL_OK);
         text_layer_set_text_color(s_top_layer, COLOR_ACID);
         text_layer_set_text_color(s_signal_layer, COLOR_ACID);
         text_layer_set_text_color(s_weather_layer, COLOR_ACID);
         light_set_color_rgb888(0xC2FE0B);
     } else {
-        snprintf(s_signal_buf, sizeof(s_signal_buf), "!! SIGNAL LOST !!");
+        text_layer_set_text(s_signal_layer, TEXT_SIGNAL_LOST);
         text_layer_set_text_color(s_top_layer, COLOR_ALERT);
         text_layer_set_text_color(s_signal_layer, COLOR_ALERT);
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
         light_set_color_rgb888(0xEA027E);
     }
-    snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "!! ATMO UNKNOWN !!");
-    text_layer_set_text(s_weather_layer, s_weather_layer_buf);
-    text_layer_set_text(s_signal_layer, s_signal_buf);
+    text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
 }
 
 // Weather update
@@ -148,10 +162,10 @@ static void update_time(void) {
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
 
-    strftime(s_time_buf, sizeof(s_time_buf), clock_is_24h_style() ? "%H:%M" : "%I:%M %p", t);
+    strftime(s_time_buf, sizeof(s_time_buf), clock_is_24h_style() ? FMT_TIME_24H : FMT_TIME_12H, t);
     text_layer_set_text(s_time_layer, s_time_buf);
 
-    strftime(s_date_buf, sizeof(s_date_buf), "%a - %b %d %Y", t);
+    strftime(s_date_buf, sizeof(s_date_buf), FMT_DATE, t);
     text_layer_set_text(s_date_layer, s_date_buf);
 }
 
@@ -164,17 +178,17 @@ static void update_steps(void) {
 
     if (mask & HealthServiceAccessibilityMaskAvailable) {
         s_steps = (int) health_service_sum_today(HealthMetricStepCount);
-        snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - %d", s_steps);
+        snprintf(s_steps_buf, sizeof(s_steps_buf), FMT_STEPS, s_steps);
+        text_layer_set_text(s_steps_layer, s_steps_buf);
     } else {
-        snprintf(s_steps_buf, sizeof(s_steps_buf), "STEPS - N/A");
+        text_layer_set_text(s_steps_layer, TEXT_STEPS_NA);
     }
-    text_layer_set_text(s_steps_layer, s_steps_buf);
 }
 
 
 // Battery update
 static void update_battery(void) {
-    snprintf(s_battery_buf, sizeof(s_battery_buf), "SHELL INTEGRITY - %d%%", s_battery);
+    snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY, s_battery);
     text_layer_set_text(s_battery_layer, s_battery_buf);
 }
 
@@ -214,7 +228,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     if (useFahrenheit_tuple) settings.useFahrenheit = useFahrenheit_tuple->value->int32 == 1;
     if (topText_tuple) {
         if (topText_tuple->value->cstring[0]) snprintf(settings.topText, sizeof(settings.topText), "%s", topText_tuple->value->cstring);
-        else snprintf(settings.topText, sizeof(settings.topText), "%s", "RUNNER // MONITOR");
+        else snprintf(settings.topText, sizeof(settings.topText), "%s", TEXT_HEADER_DEFAULT);
     }
 
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple || topText_tuple) prv_save_settings();
@@ -229,17 +243,17 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     if (settings.showCity && city_tuple) {
         snprintf(s_signal_buf, sizeof(s_signal_buf), "%s", city_tuple->value->cstring);
         text_layer_set_text(s_signal_layer, s_signal_buf);
-    } else text_layer_set_text(s_signal_layer, "TAU CETI IV");
+    } else text_layer_set_text(s_signal_layer, TEXT_SIGNAL_OK);
 
     if (settings.showWeather && temp_tuple && conditions_tuple) {
         int t = settings.useFahrenheit ? (int)temp_tuple->value->int32 * 1.8 + 32 : (int)temp_tuple->value->int32;
-        char *tLabel = settings.useFahrenheit ? "F" : "C";
+        const char *tLabel = settings.useFahrenheit ? TEXT_UNIT_F : TEXT_UNIT_C;
 
-        snprintf(s_temperature_buf, sizeof(s_temperature_buf), "%d° %s", t, tLabel);
+        snprintf(s_temperature_buf, sizeof(s_temperature_buf), FMT_TEMPERATURE, t, tLabel);
         snprintf(s_conditions_buf, sizeof(s_conditions_buf), "%s", conditions_tuple->value->cstring);
-        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "%s - %s", s_temperature_buf, s_conditions_buf);
+        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), FMT_WEATHER, s_temperature_buf, s_conditions_buf);
         text_layer_set_text(s_weather_layer, s_weather_layer_buf);
-    } else text_layer_set_text(s_weather_layer, "!! ATMO UNKNOWN !!");
+    } else text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
 
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple) update_weather();
 }
@@ -281,10 +295,10 @@ static void window_load(Window *window) {
 
     s_top_layer = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), settings.topText, s_font_small);
     s_signal_layer = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
-    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), "!! ATMO UNKNOWN !!", s_font_small);
+    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), TEXT_ATMO_UNKNOWN, s_font_small);
     s_time_layer = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
     s_date_layer = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
-    s_steps_layer = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), "STEPS - 0", s_font_small);
+    s_steps_layer = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), TEXT_STEPS_NA, s_font_small);
     s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
 
     s_battery = battery_state_service_peek().charge_percent;
