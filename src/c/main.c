@@ -359,25 +359,15 @@ static void window_load(Window *window) {
     s_canvas_layer = layer_create(bounds);
     layer_set_update_proc(s_canvas_layer, canvas_update_proc);
     layer_add_child(root, s_canvas_layer);
-    
-    #if defined(PBL_ROUND)
-        s_top_layer     = setup_text_layer(root, GRect(0, 30, bounds.size.w, 20), settings.topText, s_font_small);
-        s_signal_layer  = setup_text_layer(root, GRect(0, 50, bounds.size.w, 20), NULL, s_font_small);
-        s_weather_layer = setup_text_layer(root, GRect(0, 70, bounds.size.w, 20), NULL, s_font_small);
-        s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
-        s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - 86, bounds.size.w, 20), NULL, s_font_small);
-        s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - 66, bounds.size.w, 20), NULL, s_font_small);
-        s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 46, bounds.size.w, 18), NULL, s_font_small);
-    #else
-        s_top_layer     = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), settings.topText, s_font_small);
-        s_signal_layer  = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
-        s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), NULL, s_font_small);
-        s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
-        s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
-        s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), NULL, s_font_small);
-        s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
-    #endif
-    
+
+    s_top_layer     = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(30, 22), bounds.size.w, 20), settings.topText, s_font_small);
+    s_signal_layer  = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(50, 42), bounds.size.w, 20), NULL, s_font_small);
+    s_weather_layer = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(70, 62), bounds.size.w, 20), NULL, s_font_small);
+    s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
+    s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(86, 78), bounds.size.w, 20), NULL, s_font_small);
+    s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(66, 58), bounds.size.w, 20), NULL, s_font_small);
+    s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(46, 38), bounds.size.w, 18), NULL, s_font_small);
+
     BatteryChargeState charge_state = battery_state_service_peek();
     s_battery  = charge_state.charge_percent;
     s_charging = charge_state.is_charging;
