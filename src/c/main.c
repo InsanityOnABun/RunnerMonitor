@@ -100,18 +100,40 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     GColor fg = s_signal ? COLOR_ACID : COLOR_ALERT;
 
     graphics_context_set_stroke_color(ctx, fg);
+    graphics_context_set_fill_color(ctx, fg);
     graphics_context_set_stroke_width(ctx, 2);
 
     // Corner brackets - HUD reticle framing
-    const int m = 6, len = 14;
-    graphics_draw_line(ctx, GPoint(m, m), GPoint(m + len, m));
-    graphics_draw_line(ctx, GPoint(m, m), GPoint(m, m + len));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m - len, m));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m, m + len));
-    graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m + len, b.size.h - m));
-    graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m, b.size.h - m - len));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m - len, b.size.h - m));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m, b.size.h - m - len));
+    const int m = 6;
+    
+    #if defined(PBL_ROUND)
+        GRect arc_rect = grect_inset(b, GEdgeInsets(m));
+        const int32_t arc_half_span = DEG_TO_TRIGANGLE(8); // ~40 deg wide each
+        const int32_t bracket_thickness = 3;
+        static const int32_t bracket_centers[4] = {
+            DEG_TO_TRIGANGLE(55),
+            DEG_TO_TRIGANGLE(125),
+            DEG_TO_TRIGANGLE(235),
+            DEG_TO_TRIGANGLE(305),
+        };
+        for (int i = 0; i < 4; i++) {
+            graphics_fill_radial(ctx, arc_rect, GOvalScaleModeFitCircle,
+                                 bracket_thickness,
+                                 bracket_centers[i] - arc_half_span,
+                                 bracket_centers[i] + arc_half_span);
+        }
+    #else
+        // Emery (rect): straight L-shaped brackets pinned to the four corners.
+        const int len = 14;
+        graphics_draw_line(ctx, GPoint(m, m), GPoint(m + len, m));
+        graphics_draw_line(ctx, GPoint(m, m), GPoint(m, m + len));
+        graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m - len, m));
+        graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m, m + len));
+        graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m + len, b.size.h - m));
+        graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m, b.size.h - m - len));
+        graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m - len, b.size.h - m));
+        graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m, b.size.h - m - len));
+    #endif
 
     // Signal triangle glyph, top-center
     graphics_context_set_stroke_width(ctx, 1);
@@ -134,7 +156,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     int seg_w = 8, seg_h = 5, gap = 3;
     int total = 10 * seg_w + 9 * gap;
     int bx = (b.size.w - total) / 2;
-    int by = b.size.h - m - seg_h - 8;
+    int by = b.size.h - m - seg_h - PBL_IF_ROUND_ELSE(16, 8);
     int lit = (s_battery + 9) / 10;
     for (int i = 0; i < 10; i++) {
         GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
@@ -337,15 +359,25 @@ static void window_load(Window *window) {
     s_canvas_layer = layer_create(bounds);
     layer_set_update_proc(s_canvas_layer, canvas_update_proc);
     layer_add_child(root, s_canvas_layer);
-
-    s_top_layer     = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), settings.topText, s_font_small);
-    s_signal_layer  = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
-    s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), NULL, s_font_small);
-    s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
-    s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
-    s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), NULL, s_font_small);
-    s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
-
+    
+    #if defined(PBL_ROUND)
+        s_top_layer     = setup_text_layer(root, GRect(0, 30, bounds.size.w, 20), settings.topText, s_font_small);
+        s_signal_layer  = setup_text_layer(root, GRect(0, 50, bounds.size.w, 20), NULL, s_font_small);
+        s_weather_layer = setup_text_layer(root, GRect(0, 70, bounds.size.w, 20), NULL, s_font_small);
+        s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
+        s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - 86, bounds.size.w, 20), NULL, s_font_small);
+        s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - 66, bounds.size.w, 20), NULL, s_font_small);
+        s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 46, bounds.size.w, 18), NULL, s_font_small);
+    #else
+        s_top_layer     = setup_text_layer(root, GRect(0, 22, bounds.size.w, 20), settings.topText, s_font_small);
+        s_signal_layer  = setup_text_layer(root, GRect(0, 42, bounds.size.w, 20), NULL, s_font_small);
+        s_weather_layer = setup_text_layer(root, GRect(0, 62, bounds.size.w, 20), NULL, s_font_small);
+        s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
+        s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - 78, bounds.size.w, 20), NULL, s_font_small);
+        s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - 58, bounds.size.w, 20), NULL, s_font_small);
+        s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - 38, bounds.size.w, 18), NULL, s_font_small);
+    #endif
+    
     BatteryChargeState charge_state = battery_state_service_peek();
     s_battery  = charge_state.charge_percent;
     s_charging = charge_state.is_charging;
