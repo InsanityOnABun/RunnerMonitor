@@ -59,7 +59,7 @@ static bool s_quiet;
 
 // --- Display strings --------------------------------------------------------
 static const char TEXT_HEADER_DEFAULT[] = "RUNNER // MONITOR";
-static const char TEXT_QUIET[]          = "SILENT RUNNING";
+static const char TEXT_QUIET[]          = "//--SILENT RUNNING--//";
 static const char TEXT_SIGNAL_OK[]      = "TAU CETI IV";
 static const char TEXT_SIGNAL_LOST[]    = "!! SIGNAL LOST !!";
 static const char TEXT_ATMO_UNKNOWN[]   = "!! ATMO UNKNOWN !!";
