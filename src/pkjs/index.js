@@ -39,15 +39,16 @@ function locationSuccess(pos) {
     xhrCity.send();
 
     var weatherJson = JSON.parse(xhrWeather.responseText);
+    
     var temperature = Math.round(weatherJson.current.temperature_2m);
     var conditions = weatherCodeToCondition(weatherJson.current.weather_code);
-    
+
     var city = JSON.parse(xhrCity.responseText).city;
 
     var dictionary = {
         'TEMPERATURE': temperature,
         'CONDITIONS': conditions,
-        'CITY': city
+        'CITY': city === undefined ? "!! PARSE ERROR !!" : city
     };
 
     Pebble.sendAppMessage(dictionary,
@@ -58,6 +59,14 @@ function locationSuccess(pos) {
 
 function locationError(err) {
     console.log('Error requesting location!');
+    var dictionary = {
+        'CITY': "!! GEOSYNC FAILURE [" + err.code + "] !!"
+    };
+
+    Pebble.sendAppMessage(dictionary,
+                          function(e) { console.log('No-GPS weather info sent!'); },
+                          function(e) { console.log('Error sending no-GPS weather info!'); }
+                         );
 }
 
 function getWeather() {
