@@ -39,7 +39,6 @@ function locationSuccess(pos) {
     xhrCity.send();
 
     var weatherJson = JSON.parse(xhrWeather.responseText);
-    
     var temperature = Math.round(weatherJson.current.temperature_2m);
     var conditions = weatherCodeToCondition(weatherJson.current.weather_code);
 
