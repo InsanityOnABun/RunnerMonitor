@@ -40,7 +40,7 @@ static GFont      s_font_small;
 // --- State ------------------------------------------------------------------
 // TextLayer stores pointers, not copies: these buffers back any layer text
 // that is built at runtime, and must outlive the layers.
-static char s_signal_buf[24];
+static char s_signal_buf[28];
 static char s_temperature_buf[12];
 static char s_conditions_buf[32];
 static char s_weather_layer_buf[48];
