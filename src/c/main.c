@@ -19,7 +19,7 @@ typedef struct ClaySettings {
     bool showCity;
     bool showWeather;
     bool useFahrenheit;
-    char topText[26];       // header text; 25 chars max + NUL
+    char topText[26];
 } ClaySettings;
 
 static ClaySettings settings;
@@ -58,15 +58,18 @@ static bool s_plugged;
 static bool s_quiet;
 
 // --- Display strings --------------------------------------------------------
-static const char TEXT_HEADER_DEFAULT[] = "RUNNER // MONITOR";
-static const char TEXT_QUIET[]          = "//--SILENT RUNNING--//";
-static const char TEXT_SIGNAL_OK[]      = "TAU CETI IV";
-static const char TEXT_SIGNAL_LOST[]    = "!! SIGNAL LOST !!";
-static const char TEXT_ATMO_UNKNOWN[]   = "!! ATMO UNKNOWN !!";
-static const char TEXT_BATTERY_MAX[]    = "SHELL INTEGRITY MAX";
-static const char TEXT_STEPS_NA[]       = "STEPS - N/A";
-static const char TEXT_UNIT_F[]         = "F";
-static const char TEXT_UNIT_C[]         = "C";
+static const char TEXT_HEADER_DEFAULT[]   = "RUNNER // MONITOR";
+static const char TEXT_QUIET[]            = "//--SILENT RUNNING--//";
+static const char TEXT_SIGNAL_OK[]        = "TAU CETI IV";
+static const char TEXT_SIGNAL_LOST[]      = "!! SIGNAL LOST !!";
+static const char TEXT_ATMO_UNKNOWN[]     = "!! ATMO UNKNOWN !!";
+static const char TEXT_BATTERY_MAX[]      = "SHELL INTEGRITY MAX";
+static const char TEXT_STEPS_NA[]         = "STEPS - N/A";
+static const char TEXT_UNIT_F[]           = "F";
+static const char TEXT_UNIT_C[]           = "C";
+static const char TEXT_WEATHER_FETCHING[] = ">> FETCHING ATMO <<";   // outbox send OK
+static const char TEXT_MSG_DROPPED[]      = "!! MSG DROPPED !!";     // inbox dropped
+static const char TEXT_SEND_FAILED[]      = "!! SEND FAILED !!";     // outbox failed
 
 static const char FMT_STEPS[]          = "STEPS - %d";
 static const char FMT_BATTERY[]        = "SHELL INTEGRITY - %d%%";
@@ -102,13 +105,14 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_context_set_stroke_color(ctx, fg);
     graphics_context_set_fill_color(ctx, fg);
     graphics_context_set_stroke_width(ctx, 2);
-
-    // Corner brackets - HUD reticle framing
-    const int m = 6;
     
+    // Margin offset
+    const int m = 6;
+
+    // HUD borders, different for round vs rectangular displays
     #if defined(PBL_ROUND)
         GRect arc_rect = grect_inset(b, GEdgeInsets(m));
-        const int32_t arc_half_span = DEG_TO_TRIGANGLE(8); // ~40 deg wide each
+        const int32_t arc_half_span = DEG_TO_TRIGANGLE(8);
         const int32_t bracket_thickness = 3;
         static const int32_t bracket_centers[4] = {
             DEG_TO_TRIGANGLE(55),
@@ -123,7 +127,6 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
                                  bracket_centers[i] + arc_half_span);
         }
     #else
-        // Emery (rect): straight L-shaped brackets pinned to the four corners.
         const int len = 14;
         graphics_draw_line(ctx, GPoint(m, m), GPoint(m + len, m));
         graphics_draw_line(ctx, GPoint(m, m), GPoint(m, m + len));
@@ -152,7 +155,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_draw_line(ctx, GPoint(m + 8, rule_y1), GPoint(b.size.w - m - 8, rule_y1));
     graphics_draw_line(ctx, GPoint(m + 8, rule_y2), GPoint(b.size.w - m - 8, rule_y2));
 
-    // Battery: 10 segmented blocks, one per 10% (partial segments round up)
+    // Battery indicator
     int seg_w = 8, seg_h = 5, gap = 3;
     int total = 10 * seg_w + 9 * gap;
     int bx = (b.size.w - total) / 2;
@@ -161,7 +164,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     for (int i = 0; i < 10; i++) {
         GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
         if (i < lit) graphics_fill_rect(ctx, seg, 0, GCornerNone);
-        else graphics_draw_rect(ctx, seg);
+        else         graphics_draw_rect(ctx, seg);
     }
 }
 
@@ -173,31 +176,33 @@ static void update_top_header(void) {
 static void update_signal(void) {
     if (s_signal) {
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_OK);
-        text_layer_set_text_color(s_top_layer, COLOR_ACID);
-        text_layer_set_text_color(s_signal_layer, COLOR_ACID);
+        text_layer_set_text_color(s_top_layer,     COLOR_ACID);
+        text_layer_set_text_color(s_signal_layer,  COLOR_ACID);
         text_layer_set_text_color(s_weather_layer, COLOR_ACID);
         light_set_color_rgb888(LIGHT_ACID);
     } else {
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_LOST);
-        text_layer_set_text_color(s_top_layer, COLOR_ALERT);
-        text_layer_set_text_color(s_signal_layer, COLOR_ALERT);
+        text_layer_set_text_color(s_top_layer,     COLOR_ALERT);
+        text_layer_set_text_color(s_signal_layer,  COLOR_ALERT);
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
         light_set_color_rgb888(LIGHT_ALERT);
     }
-    // Set weather layer to unknown until bt_handler's weather update grabs it
     text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
 }
 
-// Requests a weather fetch from the phone. A failed begin (e.g. outbox busy)
-// just drops the request; the next 30-minute tick self-heals.
+// Requests a weather fetch from the phone and update signal and weather
+// lines to communicate if request was sent to phone successfully or not
 static void update_weather(void) {
     DictionaryIterator *iter;
     AppMessageResult result = app_message_outbox_begin(&iter);
     if (result == APP_MSG_OK) {
         dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
         app_message_outbox_send();
+        text_layer_set_text(s_weather_layer, TEXT_WEATHER_FETCHING);
     } else {
-        APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox unavailable: %d", (int) result);
+        APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox unavailable: %d", (int)result);
+        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "!! OUTBOX ERR %d !!", (int)result);
+        text_layer_set_text(s_weather_layer, s_weather_layer_buf);
     }
 }
 
@@ -213,11 +218,10 @@ static void update_time(void) {
 }
 
 static void update_steps(void) {
-    HealthServiceAccessibilityMask mask =
-        health_service_metric_accessible(HealthMetricStepCount, time_start_of_today(), time(NULL));
+    HealthServiceAccessibilityMask mask = health_service_metric_accessible(HealthMetricStepCount, time_start_of_today(), time(NULL));
 
     if (mask & HealthServiceAccessibilityMaskAvailable) {
-        s_steps = (int) health_service_sum_today(HealthMetricStepCount);
+        s_steps = (int)health_service_sum_today(HealthMetricStepCount);
         snprintf(s_steps_buf, sizeof(s_steps_buf), FMT_STEPS, s_steps);
         text_layer_set_text(s_steps_layer, s_steps_buf);
     } else {
@@ -257,7 +261,7 @@ static void battery_handler(BatteryChargeState state) {
     s_charging = state.is_charging;
     s_plugged  = state.is_plugged;
     update_battery();
-    layer_mark_dirty(s_canvas_layer);   // battery bar
+    layer_mark_dirty(s_canvas_layer); // Redraw canvas in case battery bar changes
 }
 
 static void bt_handler(bool connected) {
@@ -267,7 +271,7 @@ static void bt_handler(bool connected) {
     s_signal = connected;
     update_signal();
     if (connected && !prev) update_weather();
-    layer_mark_dirty(s_canvas_layer);   // brackets + glyph color
+    layer_mark_dirty(s_canvas_layer); // Redraw canvas to update color
 }
 
 static void inbox_received_handler(DictionaryIterator *iterator, void *context) {
@@ -294,11 +298,12 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         prv_save_settings();
     }
 
-    // Weather tuples (present only in fetch responses)
+    // Weather/status tuples (present only in weather fetch responses)
     Tuple *city_tuple       = dict_find(iterator, MESSAGE_KEY_CITY);
     Tuple *temp_tuple       = dict_find(iterator, MESSAGE_KEY_TEMPERATURE);
     Tuple *conditions_tuple = dict_find(iterator, MESSAGE_KEY_CONDITIONS);
 
+    // Signal / city layer
     if (settings.showCity && city_tuple) {
         snprintf(s_signal_buf, sizeof(s_signal_buf), "%s", city_tuple->value->cstring);
         text_layer_set_text(s_signal_layer, s_signal_buf);
@@ -306,31 +311,51 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_OK);
     }
 
+    // Weather layer — three cases:
+    //  1. Full data (temp + conditions): render the normal weather line.
+    //  2. Conditions only (no temp): the JS sent a status/error string;
+    //     display it verbatim so the user sees exactly what went wrong on
+    //     the phone side (e.g. ">ACQUIRING GPS<", "!!HTTP 429!!", etc.).
+    //  3. Neither: fall back to the generic unknown string.
     if (settings.showWeather && temp_tuple && conditions_tuple) {
         int t = settings.useFahrenheit
-            ? (int) temp_tuple->value->int32 * 9 / 5 + 32
-            : (int) temp_tuple->value->int32;
+            ? (int)temp_tuple->value->int32 * 9 / 5 + 32
+            : (int)temp_tuple->value->int32;
         const char *tLabel = settings.useFahrenheit ? TEXT_UNIT_F : TEXT_UNIT_C;
 
         snprintf(s_temperature_buf, sizeof(s_temperature_buf), FMT_TEMPERATURE, t, tLabel);
         snprintf(s_conditions_buf, sizeof(s_conditions_buf), "%s", conditions_tuple->value->cstring);
-        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), FMT_WEATHER,
-                 s_temperature_buf, s_conditions_buf);
+        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), FMT_WEATHER, s_temperature_buf, s_conditions_buf);
         text_layer_set_text(s_weather_layer, s_weather_layer_buf);
+
+    // *** NEW: conditions-only message = JS status/error string ***
+    } else if (settings.showWeather && conditions_tuple && !temp_tuple) {
+        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "%s",
+                 conditions_tuple->value->cstring);
+        text_layer_set_text(s_weather_layer, s_weather_layer_buf);
+
     } else {
         text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
     }
 
-    // Settings changes may alter what to display; fetch fresh data
+    // Settings changes may alter what to display; fetch fresh weather data
     if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple) update_weather();
 }
 
 static void inbox_dropped_handler(AppMessageResult reason, void *context) {
-    APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped!");
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Message dropped! Reason: %d", (int)reason);
+    snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf),
+             "!! DROP ERR %d !!", (int)reason);
+    text_layer_set_text(s_weather_layer, s_weather_layer_buf);
+    text_layer_set_text(s_signal_layer, TEXT_MSG_DROPPED);
 }
 
 static void outbox_failed_handler(DictionaryIterator *iterator, AppMessageResult reason, void *context) {
-    APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed!");
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed! Reason: %d", (int)reason);
+    snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf),
+             "!! SEND ERR %d !!", (int)reason);
+    text_layer_set_text(s_weather_layer, s_weather_layer_buf);
+    text_layer_set_text(s_signal_layer, TEXT_SEND_FAILED);
 }
 
 static void outbox_sent_handler(DictionaryIterator *iterator, void *context) {
@@ -360,10 +385,10 @@ static void window_load(Window *window) {
     layer_set_update_proc(s_canvas_layer, canvas_update_proc);
     layer_add_child(root, s_canvas_layer);
 
-    s_top_layer     = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(30, 22), bounds.size.w, 20), settings.topText, s_font_small);
-    s_signal_layer  = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(50, 42), bounds.size.w, 20), NULL, s_font_small);
-    s_weather_layer = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(70, 62), bounds.size.w, 20), NULL, s_font_small);
-    s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26, bounds.size.w, 62), NULL, s_font_big);
+    s_top_layer     = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(30, 22),  bounds.size.w, 20), settings.topText, s_font_small);
+    s_signal_layer  = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(50, 42),  bounds.size.w, 20), NULL, s_font_small);
+    s_weather_layer = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(70, 62),  bounds.size.w, 20), NULL, s_font_small);
+    s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26,     bounds.size.w, 62), NULL, s_font_big);
     s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(86, 78), bounds.size.w, 20), NULL, s_font_small);
     s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(66, 58), bounds.size.w, 20), NULL, s_font_small);
     s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(46, 38), bounds.size.w, 18), NULL, s_font_small);
@@ -403,7 +428,7 @@ static void init(void) {
     s_window = window_create();
     window_set_background_color(s_window, COLOR_VOID);
     window_set_window_handlers(s_window, (WindowHandlers) {
-        .load = window_load,
+        .load   = window_load,
         .unload = window_unload,
     });
     window_stack_push(s_window, true);
