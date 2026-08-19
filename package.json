@@ -21,7 +21,8 @@
             "showCity",
             "showWeather",
             "topText",
-            "useFahrenheit"
+            "useFahrenheit",
+            "weatherInterval"
         ],
         "projectType": "native",
         "resources": {

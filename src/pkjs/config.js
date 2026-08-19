@@ -31,6 +31,19 @@ module.exports = [
                 "messageKey": "useFahrenheit",
                 "defaultValue": true,
                 "label": "Use Fahrenheit"
+            },
+            {
+                "type": "slider",
+                "messageKey": "weatherInterval",
+                "min": 5,
+                "max": 30,
+                "step": 5,
+                "defaultValue": 30,
+                "label": "Weather Update Interval",
+                "description": "How often weather data updates. This happens when the current minute is cleanly divisible by this number. " +
+                "For example, if this is set to 20, weather data will update when the time reads XX:20, XX:40, and XX:00. NOTE: weather " +
+                "data always refreshes when the watchface is resumed — on watch restart, setting active watchface, returning from a menu " +
+                "or app to the watchface, etc."
             }
         ]
     },

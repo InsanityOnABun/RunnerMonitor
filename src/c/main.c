@@ -13,12 +13,13 @@
 
 // --- Settings ---------------------------------------------------------------
 // When changing settings struct, increment settings key, blow up previous keys
-#define SETTINGS_KEY 1
+#define SETTINGS_KEY 2
 
 typedef struct ClaySettings {
     bool showCity;
     bool showWeather;
     bool useFahrenheit;
+    int weatherInterval;
     char topText[26];
 } ClaySettings;
 
@@ -85,6 +86,7 @@ static void prv_default_settings(void) {
     settings.showCity = true;
     settings.showWeather = true;
     settings.useFahrenheit = true;
+    settings.weatherInterval = 30;
     snprintf(settings.topText, sizeof(settings.topText), "%s", TEXT_HEADER_DEFAULT);
 }
 
@@ -93,6 +95,7 @@ static void prv_save_settings(void) {
 }
 
 static void prv_load_settings(void) {
+    persist_delete(1);
     prv_default_settings();
     persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
 }
@@ -255,7 +258,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits changed) {
         update_top_header();
     }
 
-    if (tick_time->tm_min % 30 == 0) update_weather();
+    if (tick_time->tm_min % settings.weatherInterval == 0) update_weather();
 }
 
 static void battery_handler(BatteryChargeState state) {
@@ -278,14 +281,16 @@ static void bt_handler(bool connected) {
 
 static void inbox_received_handler(DictionaryIterator *iterator, void *context) {
     // Settings tuples (present only when the Clay config page was submitted)
-    Tuple *showCity_tuple      = dict_find(iterator, MESSAGE_KEY_showCity);
-    Tuple *showWeather_tuple   = dict_find(iterator, MESSAGE_KEY_showWeather);
-    Tuple *useFahrenheit_tuple = dict_find(iterator, MESSAGE_KEY_useFahrenheit);
-    Tuple *topText_tuple       = dict_find(iterator, MESSAGE_KEY_topText);
+    Tuple *showCity_tuple        = dict_find(iterator, MESSAGE_KEY_showCity);
+    Tuple *showWeather_tuple     = dict_find(iterator, MESSAGE_KEY_showWeather);
+    Tuple *useFahrenheit_tuple   = dict_find(iterator, MESSAGE_KEY_useFahrenheit);
+    Tuple *weatherInterval_tuple = dict_find(iterator, MESSAGE_KEY_weatherInterval);
+    Tuple *topText_tuple         = dict_find(iterator, MESSAGE_KEY_topText);
 
-    if (showCity_tuple)      settings.showCity      = showCity_tuple->value->int32 == 1;
-    if (showWeather_tuple)   settings.showWeather   = showWeather_tuple->value->int32 == 1;
-    if (useFahrenheit_tuple) settings.useFahrenheit = useFahrenheit_tuple->value->int32 == 1;
+    if (showCity_tuple)        settings.showCity        = showCity_tuple->value->int32 == 1;
+    if (showWeather_tuple)     settings.showWeather     = showWeather_tuple->value->int32 == 1;
+    if (useFahrenheit_tuple)   settings.useFahrenheit   = useFahrenheit_tuple->value->int32 == 1;
+    if (weatherInterval_tuple) settings.weatherInterval = weatherInterval_tuple->value->int32 == 1;
     if (topText_tuple) {
         if (topText_tuple->value->cstring[0]) {
             snprintf(settings.topText, sizeof(settings.topText), "%s", topText_tuple->value->cstring);
@@ -296,7 +301,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     }
 
     // Only touch flash when a settings tuple actually arrived
-    if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple || topText_tuple) {
+    if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple || weatherInterval_tuple || topText_tuple) {
         prv_save_settings();
     }
 
