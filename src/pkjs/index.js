@@ -127,7 +127,7 @@ function getWeather() {
     }
 
     // Step 2 of 4: Geolocation API present; beginning position request.
-    sendStatus('>LOCATING...<', '>ACQUIRING GPS<');
+    sendStatus('>> LOCATING <<', '>> ACQUIRING GPS <<');
 
     navigator.geolocation.getCurrentPosition(
         locationSuccess,
