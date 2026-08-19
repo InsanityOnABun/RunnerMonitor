@@ -32,6 +32,27 @@ function sendStatus(city, conditions) {
     );
 }
 
+// Generic async XHR helper.
+// Calls onSuccess(responseText) on HTTP 200, onFailure(statusOrErrorString) otherwise.
+function xhrRequest(url, onSuccess, onFailure) {
+    var xhr = new XMLHttpRequest();
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+            onSuccess(xhr.responseText);
+        } else {
+            onFailure(xhr.status);
+        }
+    };
+    xhr.onerror = function() {
+        onFailure('NET ERR');
+    };
+    xhr.ontimeout = function() {
+        onFailure('TIMEOUT');
+    };
+    xhr.open('GET', url, true);
+    xhr.send();
+}
+
 function locationSuccess(pos) {
     // Step 3 of 4: GPS lock acquired, now fetching weather + city data.
     sendStatus('>> POSITION FIX <<', '>> SAMPLING ATMO <<');
@@ -46,60 +67,75 @@ function locationSuccess(pos) {
         '&longitude=' + pos.coords.longitude +
         '&localityLanguage=en';
 
-    try {
-        // --- Weather XHR ---
-        var xhrWeather = new XMLHttpRequest();
-        xhrWeather.open('GET', urlWeather, false);
-        xhrWeather.send();
+    // Results collected from the two parallel requests.
+    var results = { weather: null, city: null };
+    var pending = 2;
+    var failed  = false; // Ensures we only report the first failure once.
 
-        if (xhrWeather.status !== 200) {
-            console.log('Weather XHR failed, HTTP ' + xhrWeather.status);
-            sendStatus('!! ATMO XHR FAIL !!',
-                       '!! HTTP ' + xhrWeather.status + ' !!');
+    function checkDone() {
+        pending--;
+        if (pending > 0 || failed) {
             return;
         }
-
-        // --- City XHR ---
-        var xhrCity = new XMLHttpRequest();
-        xhrCity.open('GET', urlCity, false);
-        xhrCity.send();
-
-        if (xhrCity.status !== 200) {
-            console.log('City XHR failed, HTTP ' + xhrCity.status);
-            sendStatus('!! CITY XHR FAIL !!',
-                       '!! HTTP ' + xhrCity.status + ' !!');
-            return;
-        }
-
-        // --- Parse responses ---
-        var weatherJson = JSON.parse(xhrWeather.responseText);
-        var temperature = Math.round(weatherJson.current.temperature_2m);
-        var conditions  = weatherCodeToCondition(weatherJson.current.weather_code);
-
-        var city = JSON.parse(xhrCity.responseText).city;
 
         // Step 4 of 4: Send complete weather data to watch.
         var dictionary = {
-            'TEMPERATURE': temperature,
-            'CONDITIONS':  conditions,
-            'CITY':        city === undefined ? '!! CITY UNDEFINED !!' : city
+            'TEMPERATURE': results.weather.temperature,
+            'CONDITIONS':  results.weather.conditions,
+            'CITY':        results.city === undefined ? '!! CITY UNDEFINED !!' : results.city
         };
 
         Pebble.sendAppMessage(dictionary,
             function(e) { console.log('Weather info sent!'); },
-            function(e) {
-                console.log('Error sending weather info: ' + JSON.stringify(e));
-                // Can't resend via sendAppMessage here (we're already in its error cb),
-                // but log is the best we can do at this point.
-            }
+            function(e) {console.log('Error sending weather info: ' + JSON.stringify(e));}
         );
-
-    } catch (e) {
-        // Catches JSON parse errors, network exceptions, or any other thrown error.
-        console.log('Exception in locationSuccess: ' + e.message);
-        var errSnippet = e.message ? e.message.substring(0, 18) : 'UNKNOWN';
-        sendStatus('!! EXCEPTION !!', '!!' + errSnippet + '!!');
     }
+
+    function fail(cityMsg, condMsg) {
+        if (failed) return;
+        failed = true;
+        sendStatus(cityMsg, condMsg);
+    }
+
+    // --- Weather XHR (async) ---
+    xhrRequest(urlWeather,
+        function(responseText) {
+            try {
+                var weatherJson = JSON.parse(responseText);
+                results.weather = {
+                    temperature: Math.round(weatherJson.current.temperature_2m),
+                    conditions:  weatherCodeToCondition(weatherJson.current.weather_code)
+                };
+                checkDone();
+            } catch (e) {
+                console.log('Exception parsing weather: ' + e.message);
+                var errSnippet = e.message ? e.message.substring(0, 18) : 'UNKNOWN';
+                fail('!! EXCEPTION !!', '!!' + errSnippet + '!!');
+            }
+        },
+        function(status) {
+            console.log('Weather XHR failed, HTTP ' + status);
+            fail('!! ATMO XHR FAIL !!', '!! HTTP ' + status + ' !!');
+        }
+    );
+
+    // --- City XHR (async) ---
+    xhrRequest(urlCity,
+        function(responseText) {
+            try {
+                results.city = JSON.parse(responseText).city;
+                checkDone();
+            } catch (e) {
+                console.log('Exception parsing city: ' + e.message);
+                var errSnippet = e.message ? e.message.substring(0, 18) : 'UNKNOWN';
+                fail('!! EXCEPTION !!', '!!' + errSnippet + '!!');
+            }
+        },
+        function(status) {
+            console.log('City XHR failed, HTTP ' + status);
+            fail('!! CITY XHR FAIL !!', '!! HTTP ' + status + ' !!');
+        }
+    );
 }
 
 function locationError(err) {
