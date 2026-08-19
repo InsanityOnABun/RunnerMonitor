@@ -193,16 +193,18 @@ static void update_signal(void) {
 // Requests a weather fetch from the phone and update signal and weather
 // lines to communicate if request was sent to phone successfully or not
 static void update_weather(void) {
-    DictionaryIterator *iter;
-    AppMessageResult result = app_message_outbox_begin(&iter);
-    if (result == APP_MSG_OK) {
-        dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
-        app_message_outbox_send();
-        text_layer_set_text(s_weather_layer, TEXT_WEATHER_FETCHING);
-    } else {
-        APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox unavailable: %d", (int)result);
-        snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "!! OUTBOX ERR %d !!", (int)result);
-        text_layer_set_text(s_weather_layer, s_weather_layer_buf);
+    if (s_signal && (settings.showCity || settings.showWeather)) {
+        DictionaryIterator *iter;
+        AppMessageResult result = app_message_outbox_begin(&iter);
+        if (result == APP_MSG_OK) {
+            dict_write_uint8(iter, MESSAGE_KEY_REQUEST_WEATHER, 1);
+            app_message_outbox_send();
+            text_layer_set_text(s_weather_layer, TEXT_WEATHER_FETCHING);
+        } else {
+            APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox unavailable: %d", (int)result);
+            snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "!! OUTBOX ERR %d !!", (int)result);
+            text_layer_set_text(s_weather_layer, s_weather_layer_buf);
+        }
     }
 }
 
