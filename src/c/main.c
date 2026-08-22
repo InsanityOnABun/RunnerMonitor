@@ -248,6 +248,11 @@ static void update_battery(void) {
 }
 
 // --- Event handlers ---------------------------------------------------------
+static void weather_refresh_timer_handler(void *data) {
+    APP_LOG(APP_LOG_LEVEL_INFO, "Firing delayed weather call");
+    update_weather();
+}
+
 static void tick_handler(struct tm *tick_time, TimeUnits changed) {
     update_time();
     update_steps();
@@ -258,7 +263,11 @@ static void tick_handler(struct tm *tick_time, TimeUnits changed) {
         update_top_header();
     }
 
-    if (tick_time->tm_min % settings.weatherInterval == 0) update_weather();
+    if ((tick_time->tm_min + 1) % settings.weatherInterval == 0) {
+        int delay = rand() % 120000;
+        APP_LOG(APP_LOG_LEVEL_INFO, "Delaying weather call for %d millis", delay);
+        app_timer_register(delay, weather_refresh_timer_handler, NULL);
+    }
 }
 
 static void battery_handler(BatteryChargeState state) {
@@ -290,7 +299,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
     if (showCity_tuple)        settings.showCity        = showCity_tuple->value->int32 == 1;
     if (showWeather_tuple)     settings.showWeather     = showWeather_tuple->value->int32 == 1;
     if (useFahrenheit_tuple)   settings.useFahrenheit   = useFahrenheit_tuple->value->int32 == 1;
-    if (weatherInterval_tuple) settings.weatherInterval = weatherInterval_tuple->value->int32 == 1;
+    if (weatherInterval_tuple) settings.weatherInterval = weatherInterval_tuple->value->int32;
     if (topText_tuple) {
         if (topText_tuple->value->cstring[0]) {
             snprintf(settings.topText, sizeof(settings.topText), "%s", topText_tuple->value->cstring);
@@ -413,7 +422,6 @@ static void window_load(Window *window) {
     update_battery();
     update_signal();
     update_top_header();
-    update_weather();
 }
 
 static void window_unload(Window *window) {
