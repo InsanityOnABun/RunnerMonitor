@@ -12,8 +12,18 @@
 #define LIGHT_ALERT 0xEA027E
 
 // --- Settings ---------------------------------------------------------------
-// When changing settings struct, increment settings key, blow up previous keys
-#define SETTINGS_KEY 2
+// Old keys left for identifying old structure and reminder to not use them
+#define SETTINGS_KEY_LEGACY_1 1
+#define SETTINGS_KEY_LEGACY_2 2
+
+#define SETTINGS_KEY_VERSION          100
+#define SETTINGS_KEY_SHOW_CITY        101
+#define SETTINGS_KEY_SHOW_WEATHER     102
+#define SETTINGS_KEY_USE_FAHRENHEIT   103
+#define SETTINGS_KEY_WEATHER_INTERVAL 104
+#define SETTINGS_KEY_TOP_TEXT         105
+
+#define SETTINGS_VERSION 1
 
 typedef struct ClaySettings {
     bool showCity;
@@ -91,13 +101,87 @@ static void prv_default_settings(void) {
 }
 
 static void prv_save_settings(void) {
-    persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
+    persist_write_int(SETTINGS_KEY_VERSION, SETTINGS_VERSION);
+    persist_write_bool(SETTINGS_KEY_SHOW_CITY, settings.showCity);
+    persist_write_bool(SETTINGS_KEY_SHOW_WEATHER, settings.showWeather);
+    persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, settings.useFahrenheit);
+    persist_write_int(SETTINGS_KEY_WEATHER_INTERVAL, settings.weatherInterval);
+    persist_write_string(SETTINGS_KEY_TOP_TEXT, settings.topText);
+}
+
+static void prv_migrate_legacy_settings(void) {
+    bool migrated = true;
+    if (persist_exists(SETTINGS_KEY_LEGACY_2)) {
+        APP_LOG(APP_LOG_LEVEL_INFO, "Migrating legacy blob (key %d) to per-field keys", SETTINGS_KEY_LEGACY_2);
+        typedef struct ClaySettingsLegacy2 {
+            bool showCity;
+            bool showWeather;
+            bool useFahrenheit;
+            int weatherInterval;
+            char topText[26];
+        } ClaySettingsLegacy2;
+
+        ClaySettingsLegacy2 oldSettings;
+        persist_read_data(SETTINGS_KEY_LEGACY_2, &oldSettings, sizeof(oldSettings));
+
+        persist_write_bool(SETTINGS_KEY_SHOW_CITY, oldSettings.showCity);
+        persist_write_bool(SETTINGS_KEY_SHOW_WEATHER, oldSettings.showWeather);
+        persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, oldSettings.useFahrenheit);
+        persist_write_int(SETTINGS_KEY_WEATHER_INTERVAL, oldSettings.weatherInterval);
+        persist_write_string(SETTINGS_KEY_TOP_TEXT, oldSettings.topText);
+
+        persist_delete(SETTINGS_KEY_LEGACY_2);
+        persist_delete(SETTINGS_KEY_LEGACY_1);
+
+    } else if (persist_exists(SETTINGS_KEY_LEGACY_1)) {
+        APP_LOG(APP_LOG_LEVEL_INFO, "Migrating legacy blob (key %d) to per-field keys", SETTINGS_KEY_LEGACY_1);
+        typedef struct ClaySettingsLegacy1 {
+            bool showCity;
+            bool showWeather;
+            bool useFahrenheit;
+            char topText[26];
+        } ClaySettingsLegacy1;
+
+        ClaySettingsLegacy1 oldSettings;
+        persist_read_data(SETTINGS_KEY_LEGACY_1, &oldSettings, sizeof(oldSettings));
+
+        persist_write_bool(SETTINGS_KEY_SHOW_CITY, oldSettings.showCity);
+        persist_write_bool(SETTINGS_KEY_SHOW_WEATHER, oldSettings.showWeather);
+        persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, oldSettings.useFahrenheit);
+        persist_write_string(SETTINGS_KEY_TOP_TEXT, oldSettings.topText);
+
+        persist_delete(SETTINGS_KEY_LEGACY_2);
+        persist_delete(SETTINGS_KEY_LEGACY_1);
+
+    } else if (persist_read_int(SETTINGS_KEY_VERSION) != SETTINGS_VERSION) {
+        APP_LOG(APP_LOG_LEVEL_INFO, "Migrating from settings version %d to latest version", persist_read_int(SETTINGS_KEY_VERSION));
+        // Nothing here yet, still on ver 1
+    } else {
+        APP_LOG(APP_LOG_LEVEL_INFO, "Old and current settings versions match");
+        migrated = false;
+    }
+
+    if (migrated) persist_write_int(SETTINGS_KEY_VERSION, SETTINGS_VERSION);
 }
 
 static void prv_load_settings(void) {
-    persist_delete(1);
     prv_default_settings();
-    persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
+    prv_migrate_legacy_settings();
+
+    if (persist_exists(SETTINGS_KEY_SHOW_CITY)) 
+        settings.showCity = persist_read_bool(SETTINGS_KEY_SHOW_CITY);
+
+    if (persist_exists(SETTINGS_KEY_SHOW_WEATHER)) 
+        settings.showWeather = persist_read_bool(SETTINGS_KEY_SHOW_WEATHER);
+
+    if (persist_exists(SETTINGS_KEY_USE_FAHRENHEIT))  
+        settings.useFahrenheit = persist_read_bool(SETTINGS_KEY_USE_FAHRENHEIT);
+
+    if (persist_exists(SETTINGS_KEY_WEATHER_INTERVAL)) 
+        settings.weatherInterval = persist_read_int(SETTINGS_KEY_WEATHER_INTERVAL);
+
+    if (persist_exists(SETTINGS_KEY_TOP_TEXT)) 
+        persist_read_string(SETTINGS_KEY_TOP_TEXT, settings.topText, sizeof(settings.topText));
 }
 
 // --- Canvas rendering -------------------------------------------------------
@@ -108,37 +192,37 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_context_set_stroke_color(ctx, fg);
     graphics_context_set_fill_color(ctx, fg);
     graphics_context_set_stroke_width(ctx, 2);
-    
+
     // Margin offset
     const int m = 6;
 
     // HUD borders, different for round vs rectangular displays
     #if defined(PBL_ROUND)
-        GRect arc_rect = grect_inset(b, GEdgeInsets(m));
-        const int32_t arc_half_span = DEG_TO_TRIGANGLE(8);
-        const int32_t bracket_thickness = 3;
-        static const int32_t bracket_centers[4] = {
-            DEG_TO_TRIGANGLE(55),
-            DEG_TO_TRIGANGLE(125),
-            DEG_TO_TRIGANGLE(235),
-            DEG_TO_TRIGANGLE(305),
-        };
-        for (int i = 0; i < 4; i++) {
-            graphics_fill_radial(ctx, arc_rect, GOvalScaleModeFitCircle,
-                                 bracket_thickness,
-                                 bracket_centers[i] - arc_half_span,
-                                 bracket_centers[i] + arc_half_span);
-        }
+    GRect arc_rect = grect_inset(b, GEdgeInsets(m));
+    const int32_t arc_half_span = DEG_TO_TRIGANGLE(8);
+    const int32_t bracket_thickness = 3;
+    static const int32_t bracket_centers[4] = {
+        DEG_TO_TRIGANGLE(55),
+        DEG_TO_TRIGANGLE(125),
+        DEG_TO_TRIGANGLE(235),
+        DEG_TO_TRIGANGLE(305),
+    };
+    for (int i = 0; i < 4; i++) {
+        graphics_fill_radial(ctx, arc_rect, GOvalScaleModeFitCircle,
+                             bracket_thickness,
+                             bracket_centers[i] - arc_half_span,
+                             bracket_centers[i] + arc_half_span);
+    }
     #else
-        const int len = 14;
-        graphics_draw_line(ctx, GPoint(m, m), GPoint(m + len, m));
-        graphics_draw_line(ctx, GPoint(m, m), GPoint(m, m + len));
-        graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m - len, m));
-        graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m, m + len));
-        graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m + len, b.size.h - m));
-        graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m, b.size.h - m - len));
-        graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m - len, b.size.h - m));
-        graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m, b.size.h - m - len));
+    const int len = 14;
+    graphics_draw_line(ctx, GPoint(m, m), GPoint(m + len, m));
+    graphics_draw_line(ctx, GPoint(m, m), GPoint(m, m + len));
+    graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m - len, m));
+    graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m, m + len));
+    graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m + len, b.size.h - m));
+    graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m, b.size.h - m - len));
+    graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m - len, b.size.h - m));
+    graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m, b.size.h - m - len));
     #endif
 
     // Signal triangle glyph, top-center
@@ -182,15 +266,19 @@ static void update_signal(void) {
         text_layer_set_text_color(s_top_layer,     COLOR_ACID);
         text_layer_set_text_color(s_signal_layer,  COLOR_ACID);
         text_layer_set_text_color(s_weather_layer, COLOR_ACID);
-        light_set_color_rgb888(LIGHT_ACID);
+        #if PBL_COLOR
+            light_set_color_rgb888(LIGHT_ACID);
+        #endif
     } else {
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_LOST);
+        text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
         text_layer_set_text_color(s_top_layer,     COLOR_ALERT);
         text_layer_set_text_color(s_signal_layer,  COLOR_ALERT);
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
-        light_set_color_rgb888(LIGHT_ALERT);
+        #if PBL_COLOR
+            light_set_color_rgb888(LIGHT_ALERT);
+        #endif
     }
-    text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
 }
 
 // Requests a weather fetch from the phone and update signal and weather
@@ -344,7 +432,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), FMT_WEATHER, s_temperature_buf, s_conditions_buf);
         text_layer_set_text(s_weather_layer, s_weather_layer_buf);
 
-    // *** NEW: conditions-only message = JS status/error string ***
+        // Conditions-only message = JS status/error string
     } else if (settings.showWeather && conditions_tuple && !temp_tuple) {
         snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "%s",
                  conditions_tuple->value->cstring);
