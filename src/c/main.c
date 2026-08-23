@@ -332,6 +332,7 @@ static void update_battery(void) {
         snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY, battery_state.charge_percent);
         text_layer_set_text(s_battery_layer, s_battery_buf);
     }
+    layer_mark_dirty(s_canvas_layer); // Redraw canvas in case battery changed enough to impact bar
 }
 
 // --- Event handlers ---------------------------------------------------------
@@ -360,7 +361,6 @@ static void tick_handler(struct tm *tick_time, TimeUnits changed) {
 static void battery_handler(BatteryChargeState state) {
     battery_state = state;
     update_battery();
-    layer_mark_dirty(s_canvas_layer); // Redraw canvas in case battery bar changes
 }
 
 static void bt_handler(bool connected) {
