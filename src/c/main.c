@@ -12,9 +12,9 @@
 #define LIGHT_ALERT 0xEA027E
 
 // --- Settings ---------------------------------------------------------------
-// Old keys left for identifying old structure and reminder to not use them
-#define SETTINGS_KEY_LEGACY_1 1
-#define SETTINGS_KEY_LEGACY_2 2
+// Legacy keys are kept only to detect and migrate old persisted blobs.
+#define SETTINGS_KEY_LEGACY_1         1
+#define SETTINGS_KEY_LEGACY_2         2
 
 #define SETTINGS_KEY_VERSION          100
 #define SETTINGS_KEY_SHOW_CITY        101
@@ -31,7 +31,7 @@ typedef struct ClaySettings {
     bool showCity;
     bool showWeather;
     bool useFahrenheit;
-    int weatherInterval;
+    int  weatherInterval;
     bool changeBacklight;
 } ClaySettings;
 
@@ -63,11 +63,10 @@ static char s_steps_buf[16];
 static char s_battery_buf[24];
 
 static int  s_steps;
-
 static bool s_signal;
 static bool s_quiet;
 
-static BatteryChargeState battery_state;
+static BatteryChargeState s_battery_state;
 
 // --- Display strings --------------------------------------------------------
 static const char TEXT_HEADER_DEFAULT[]   = "RUNNER // MONITOR";
@@ -79,10 +78,13 @@ static const char TEXT_BATTERY_MAX[]      = "SHELL INTEGRITY MAX";
 static const char TEXT_STEPS_NA[]         = "STEPS - N/A";
 static const char TEXT_UNIT_F[]           = "F";
 static const char TEXT_UNIT_C[]           = "C";
-static const char TEXT_WEATHER_FETCHING[] = ">> FETCHING ATMO <<";   // outbox send OK
-static const char TEXT_MSG_DROPPED[]      = "!! MSG DROPPED !!";     // inbox dropped
-static const char TEXT_SEND_FAILED[]      = "!! SEND FAILED !!";     // outbox failed
+// Transient status strings shown while a message round-trip is in progress
+// or has failed.
+static const char TEXT_WEATHER_FETCHING[] = ">> FETCHING ATMO <<";
+static const char TEXT_MSG_DROPPED[]      = "!! MSG DROPPED !!";
+static const char TEXT_SEND_FAILED[]      = "!! SEND FAILED !!";
 
+// --- Format strings ---------------------------------------------------------
 static const char FMT_STEPS[]          = "STEPS - %d";
 static const char FMT_BATTERY[]        = "SHELL INTEGRITY - %d%%";
 static const char FMT_BATTERY_REPAIR[] = "SHELL REPAIRING - %d%%";
@@ -95,49 +97,56 @@ static const char FMT_DATE[]           = "%a - %b %d %Y";
 // --- Settings persistence ---------------------------------------------------
 static void prv_default_settings(void) {
     snprintf(settings.topText, sizeof(settings.topText), "%s", TEXT_HEADER_DEFAULT);
-    settings.showCity = true;
-    settings.showWeather = true;
-    settings.useFahrenheit = true;
+    settings.showCity        = true;
+    settings.showWeather     = true;
+    settings.useFahrenheit   = true;
     settings.weatherInterval = 30;
     settings.changeBacklight = true;
 }
 
 static void prv_save_settings(void) {
-    persist_write_int(SETTINGS_KEY_VERSION, SETTINGS_VERSION);
-    persist_write_string(SETTINGS_KEY_TOP_TEXT, settings.topText);
-    persist_write_bool(SETTINGS_KEY_SHOW_CITY, settings.showCity);
-    persist_write_bool(SETTINGS_KEY_SHOW_WEATHER, settings.showWeather);
-    persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, settings.useFahrenheit);
+    persist_write_int(SETTINGS_KEY_VERSION,          SETTINGS_VERSION);
+    persist_write_string(SETTINGS_KEY_TOP_TEXT,      settings.topText);
+    persist_write_bool(SETTINGS_KEY_SHOW_CITY,       settings.showCity);
+    persist_write_bool(SETTINGS_KEY_SHOW_WEATHER,    settings.showWeather);
+    persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT,  settings.useFahrenheit);
     persist_write_int(SETTINGS_KEY_WEATHER_INTERVAL, settings.weatherInterval);
     persist_write_bool(SETTINGS_KEY_CHANGE_BACKLIGHT, settings.changeBacklight);
 }
 
 static void prv_migrate_legacy_settings(void) {
     bool migrated = true;
+
     if (persist_exists(SETTINGS_KEY_LEGACY_2)) {
-        APP_LOG(APP_LOG_LEVEL_INFO, "Migrating legacy blob (key %d) to per-field keys", SETTINGS_KEY_LEGACY_2);
+        APP_LOG(APP_LOG_LEVEL_INFO,
+                "Migrating legacy blob (key %d) to per-field keys",
+                SETTINGS_KEY_LEGACY_2);
+
         typedef struct ClaySettingsLegacy2 {
             bool showCity;
             bool showWeather;
             bool useFahrenheit;
-            int weatherInterval;
+            int  weatherInterval;
             char topText[26];
         } ClaySettingsLegacy2;
 
-        ClaySettingsLegacy2 oldSettings;
-        persist_read_data(SETTINGS_KEY_LEGACY_2, &oldSettings, sizeof(oldSettings));
+        ClaySettingsLegacy2 old;
+        persist_read_data(SETTINGS_KEY_LEGACY_2, &old, sizeof(old));
 
-        persist_write_bool(SETTINGS_KEY_SHOW_CITY, oldSettings.showCity);
-        persist_write_bool(SETTINGS_KEY_SHOW_WEATHER, oldSettings.showWeather);
-        persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, oldSettings.useFahrenheit);
-        persist_write_int(SETTINGS_KEY_WEATHER_INTERVAL, oldSettings.weatherInterval);
-        persist_write_string(SETTINGS_KEY_TOP_TEXT, oldSettings.topText);
+        persist_write_bool(SETTINGS_KEY_SHOW_CITY,       old.showCity);
+        persist_write_bool(SETTINGS_KEY_SHOW_WEATHER,    old.showWeather);
+        persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT,  old.useFahrenheit);
+        persist_write_int(SETTINGS_KEY_WEATHER_INTERVAL, old.weatherInterval);
+        persist_write_string(SETTINGS_KEY_TOP_TEXT,      old.topText);
 
         persist_delete(SETTINGS_KEY_LEGACY_2);
         persist_delete(SETTINGS_KEY_LEGACY_1);
 
     } else if (persist_exists(SETTINGS_KEY_LEGACY_1)) {
-        APP_LOG(APP_LOG_LEVEL_INFO, "Migrating legacy blob (key %d) to per-field keys", SETTINGS_KEY_LEGACY_1);
+        APP_LOG(APP_LOG_LEVEL_INFO,
+                "Migrating legacy blob (key %d) to per-field keys",
+                SETTINGS_KEY_LEGACY_1);
+
         typedef struct ClaySettingsLegacy1 {
             bool showCity;
             bool showWeather;
@@ -145,54 +154,61 @@ static void prv_migrate_legacy_settings(void) {
             char topText[26];
         } ClaySettingsLegacy1;
 
-        ClaySettingsLegacy1 oldSettings;
-        persist_read_data(SETTINGS_KEY_LEGACY_1, &oldSettings, sizeof(oldSettings));
+        ClaySettingsLegacy1 old;
+        persist_read_data(SETTINGS_KEY_LEGACY_1, &old, sizeof(old));
 
-        persist_write_bool(SETTINGS_KEY_SHOW_CITY, oldSettings.showCity);
-        persist_write_bool(SETTINGS_KEY_SHOW_WEATHER, oldSettings.showWeather);
-        persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, oldSettings.useFahrenheit);
-        persist_write_string(SETTINGS_KEY_TOP_TEXT, oldSettings.topText);
+        persist_write_bool(SETTINGS_KEY_SHOW_CITY,      old.showCity);
+        persist_write_bool(SETTINGS_KEY_SHOW_WEATHER,   old.showWeather);
+        persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, old.useFahrenheit);
+        persist_write_string(SETTINGS_KEY_TOP_TEXT,     old.topText);
 
         persist_delete(SETTINGS_KEY_LEGACY_2);
         persist_delete(SETTINGS_KEY_LEGACY_1);
 
     } else if (persist_read_int(SETTINGS_KEY_VERSION) != SETTINGS_VERSION) {
-        APP_LOG(APP_LOG_LEVEL_INFO, "Migrating from settings version %d to latest version", persist_read_int(SETTINGS_KEY_VERSION));
-        // Nothing here yet, still on ver 1
+        APP_LOG(APP_LOG_LEVEL_INFO,
+                "Migrating from settings version %d to latest version",
+                persist_read_int(SETTINGS_KEY_VERSION));
+        // Nothing here yet — still on version 1.
+
     } else {
         APP_LOG(APP_LOG_LEVEL_INFO, "Old and current settings versions match");
         migrated = false;
     }
 
-    if (migrated) persist_write_int(SETTINGS_KEY_VERSION, SETTINGS_VERSION);
+    if (migrated) {
+        persist_write_int(SETTINGS_KEY_VERSION, SETTINGS_VERSION);
+    }
 }
 
 static void prv_load_settings(void) {
     prv_default_settings();
     prv_migrate_legacy_settings();
 
-    if (persist_exists(SETTINGS_KEY_TOP_TEXT)) 
-        persist_read_string(SETTINGS_KEY_TOP_TEXT, settings.topText, sizeof(settings.topText));
-
-    if (persist_exists(SETTINGS_KEY_SHOW_CITY)) 
+    if (persist_exists(SETTINGS_KEY_TOP_TEXT)) {
+        persist_read_string(SETTINGS_KEY_TOP_TEXT,
+                            settings.topText, sizeof(settings.topText));
+    }
+    if (persist_exists(SETTINGS_KEY_SHOW_CITY)) {
         settings.showCity = persist_read_bool(SETTINGS_KEY_SHOW_CITY);
-
-    if (persist_exists(SETTINGS_KEY_SHOW_WEATHER)) 
+    }
+    if (persist_exists(SETTINGS_KEY_SHOW_WEATHER)) {
         settings.showWeather = persist_read_bool(SETTINGS_KEY_SHOW_WEATHER);
-
-    if (persist_exists(SETTINGS_KEY_USE_FAHRENHEIT))  
+    }
+    if (persist_exists(SETTINGS_KEY_USE_FAHRENHEIT)) {
         settings.useFahrenheit = persist_read_bool(SETTINGS_KEY_USE_FAHRENHEIT);
-
-    if (persist_exists(SETTINGS_KEY_WEATHER_INTERVAL)) 
+    }
+    if (persist_exists(SETTINGS_KEY_WEATHER_INTERVAL)) {
         settings.weatherInterval = persist_read_int(SETTINGS_KEY_WEATHER_INTERVAL);
-
-    if (persist_exists(SETTINGS_KEY_CHANGE_BACKLIGHT))  
+    }
+    if (persist_exists(SETTINGS_KEY_CHANGE_BACKLIGHT)) {
         settings.changeBacklight = persist_read_bool(SETTINGS_KEY_CHANGE_BACKLIGHT);
+    }
 }
 
 // --- Canvas rendering -------------------------------------------------------
 static void canvas_update_proc(Layer *layer, GContext *ctx) {
-    GRect b = layer_get_bounds(layer);
+    GRect  b  = layer_get_bounds(layer);
     GColor fg = s_signal ? COLOR_ACID : COLOR_ALERT;
 
     graphics_context_set_stroke_color(ctx, fg);
@@ -202,11 +218,11 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     // Margin offset
     const int m = 6;
 
-    // HUD borders, different for round vs rectangular displays
+    // HUD corner brackets — arcs on round displays, L-shaped lines on rect.
     #if defined(PBL_ROUND)
     GRect arc_rect = grect_inset(b, GEdgeInsets(m));
-    const int32_t arc_half_span = DEG_TO_TRIGANGLE(8);
-    const int32_t bracket_thickness = 3;
+    const int32_t arc_half_span      = DEG_TO_TRIGANGLE(8);
+    const int32_t bracket_thickness  = 3;
     static const int32_t bracket_centers[4] = {
         DEG_TO_TRIGANGLE(55),
         DEG_TO_TRIGANGLE(125),
@@ -219,16 +235,23 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
                              bracket_centers[i] - arc_half_span,
                              bracket_centers[i] + arc_half_span);
     }
-    #else
+    #else // PBL_RECT
     const int len = 14;
-    graphics_draw_line(ctx, GPoint(m, m), GPoint(m + len, m));
-    graphics_draw_line(ctx, GPoint(m, m), GPoint(m, m + len));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m - len, m));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, m), GPoint(b.size.w - m, m + len));
-    graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m + len, b.size.h - m));
-    graphics_draw_line(ctx, GPoint(m, b.size.h - m), GPoint(m, b.size.h - m - len));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m - len, b.size.h - m));
-    graphics_draw_line(ctx, GPoint(b.size.w - m, b.size.h - m), GPoint(b.size.w - m, b.size.h - m - len));
+    int r = b.size.w - m; // right edge
+    int bot = b.size.h - m; // bottom edge
+
+    // Top-left
+    graphics_draw_line(ctx, GPoint(m, m),         GPoint(m + len, m));
+    graphics_draw_line(ctx, GPoint(m, m),          GPoint(m, m + len));
+    // Top-right
+    graphics_draw_line(ctx, GPoint(r, m),          GPoint(r - len, m));
+    graphics_draw_line(ctx, GPoint(r, m),          GPoint(r, m + len));
+    // Bottom-left
+    graphics_draw_line(ctx, GPoint(m, bot),        GPoint(m + len, bot));
+    graphics_draw_line(ctx, GPoint(m, bot),        GPoint(m, bot - len));
+    // Bottom-right
+    graphics_draw_line(ctx, GPoint(r, bot),        GPoint(r - len, bot));
+    graphics_draw_line(ctx, GPoint(r, bot),        GPoint(r, bot - len));
     #endif
 
     // Signal triangle glyph, top-center
@@ -238,7 +261,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_draw_line(ctx, GPoint(apex.x + 5, apex.y + 8), GPoint(apex.x, apex.y));
     graphics_draw_line(ctx, GPoint(apex.x - 5, apex.y + 8), GPoint(apex.x + 5, apex.y + 8));
 
-    // Everything below the top rule stays green regardless of signal state
+    // Everything below the top rule stays green regardless of signal state.
     graphics_context_set_stroke_color(ctx, COLOR_ACID);
     graphics_context_set_fill_color(ctx, COLOR_ACID);
 
@@ -248,16 +271,19 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     graphics_draw_line(ctx, GPoint(m + 8, rule_y1), GPoint(b.size.w - m - 8, rule_y1));
     graphics_draw_line(ctx, GPoint(m + 8, rule_y2), GPoint(b.size.w - m - 8, rule_y2));
 
-    // Battery indicator
-    int seg_w = 8, seg_h = 5, gap = 3;
-    int total = 10 * seg_w + 9 * gap;
-    int bx = (b.size.w - total) / 2;
-    int by = b.size.h - m - seg_h - PBL_IF_ROUND_ELSE(16, 8);
-    int lit = (battery_state.charge_percent + 9) / 10;
+    // Battery indicator — a row of 10 filled/outlined segments
+    int seg_w  = 8, seg_h = 5, gap = 3;
+    int total  = 10 * seg_w + 9 * gap;
+    int bx     = (b.size.w - total) / 2;
+    int by     = b.size.h - m - seg_h - PBL_IF_ROUND_ELSE(16, 8);
+    int lit    = (s_battery_state.charge_percent + 9) / 10;
     for (int i = 0; i < 10; i++) {
         GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
-        if (i < lit) graphics_fill_rect(ctx, seg, 0, GCornerNone);
-        else         graphics_draw_rect(ctx, seg);
+        if (i < lit) {
+            graphics_fill_rect(ctx, seg, 0, GCornerNone);
+        } else {
+            graphics_draw_rect(ctx, seg);
+        }
     }
 }
 
@@ -267,32 +293,34 @@ static void update_top_header(void) {
 }
 
 static void update_backlight(void) {
-    #if PBL_COLOR
-    if (settings.changeBacklight)
+    #if defined(PBL_RGB_BACKLIGHT)
+    if (settings.changeBacklight) {
         light_set_color_rgb888(s_signal ? LIGHT_ACID : LIGHT_ALERT);
-    else
+    } else {
         light_set_system_color();
+    }
     #endif
 }
 
 static void update_signal(void) {
+    GColor color;
     if (s_signal) {
+        color = COLOR_ACID;
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_OK);
-        text_layer_set_text_color(s_top_layer,     COLOR_ACID);
-        text_layer_set_text_color(s_signal_layer,  COLOR_ACID);
-        text_layer_set_text_color(s_weather_layer, COLOR_ACID);
     } else {
-        text_layer_set_text(s_signal_layer, TEXT_SIGNAL_LOST);
+        color = COLOR_ALERT;
+        text_layer_set_text(s_signal_layer,  TEXT_SIGNAL_LOST);
         text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
-        text_layer_set_text_color(s_top_layer,     COLOR_ALERT);
-        text_layer_set_text_color(s_signal_layer,  COLOR_ALERT);
-        text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
     }
+    text_layer_set_text_color(s_top_layer,     color);
+    text_layer_set_text_color(s_signal_layer,  color);
+    text_layer_set_text_color(s_weather_layer, color);
+
     update_backlight();
 }
 
-// Requests a weather fetch from the phone and update signal and weather
-// lines to communicate if request was sent to phone successfully or not
+// Requests a weather fetch from the phone and updates the signal and weather
+// lines to communicate whether the request was sent successfully.
 static void update_weather(void) {
     if (s_signal && (settings.showCity || settings.showWeather)) {
         DictionaryIterator *iter;
@@ -303,7 +331,8 @@ static void update_weather(void) {
             text_layer_set_text(s_weather_layer, TEXT_WEATHER_FETCHING);
         } else {
             APP_LOG(APP_LOG_LEVEL_WARNING, "Outbox unavailable: %d", (int)result);
-            snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf), "!! OUTBOX ERR %d !!", (int)result);
+            snprintf(s_weather_layer_buf, sizeof(s_weather_layer_buf),
+                     "!! OUTBOX ERR %d !!", (int)result);
             text_layer_set_text(s_weather_layer, s_weather_layer_buf);
         }
     }
@@ -313,7 +342,9 @@ static void update_time(void) {
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
 
-    strftime(s_time_buf, sizeof(s_time_buf), clock_is_24h_style() ? FMT_TIME_24H : FMT_TIME_12H, t);
+    strftime(s_time_buf, sizeof(s_time_buf),
+             clock_is_24h_style() ? FMT_TIME_24H : FMT_TIME_12H, t);
+    
     text_layer_set_text(s_time_layer, s_time_buf);
 
     strftime(s_date_buf, sizeof(s_date_buf), FMT_DATE, t);
@@ -321,7 +352,8 @@ static void update_time(void) {
 }
 
 static void update_steps(void) {
-    HealthServiceAccessibilityMask mask = health_service_metric_accessible(HealthMetricStepCount, time_start_of_today(), time(NULL));
+    HealthServiceAccessibilityMask mask = health_service_metric_accessible(
+        HealthMetricStepCount, time_start_of_today(), time(NULL));
 
     if (mask & HealthServiceAccessibilityMaskAvailable) {
         s_steps = (int)health_service_sum_today(HealthMetricStepCount);
@@ -333,17 +365,22 @@ static void update_steps(void) {
 }
 
 static void update_battery(void) {
-    // is_plugged stays true while charging, so test s_charging first
-    if (battery_state.is_charging) {
-        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY_REPAIR, battery_state.charge_percent);
+    // is_plugged stays true while charging, so test is_charging first
+    if (s_battery_state.is_charging) {
+        snprintf(s_battery_buf, sizeof(s_battery_buf),
+                 FMT_BATTERY_REPAIR, s_battery_state.charge_percent);
+        
         text_layer_set_text(s_battery_layer, s_battery_buf);
-    } else if (battery_state.is_plugged) {
+    } else if (s_battery_state.is_plugged) {
         text_layer_set_text(s_battery_layer, TEXT_BATTERY_MAX);
     } else {
-        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY, battery_state.charge_percent);
+        snprintf(s_battery_buf, sizeof(s_battery_buf),
+                 FMT_BATTERY, s_battery_state.charge_percent);
+        
         text_layer_set_text(s_battery_layer, s_battery_buf);
     }
-    layer_mark_dirty(s_canvas_layer); // Redraw canvas in case battery changed enough to impact bar
+    // Redraw canvas so the battery bar reflects the new charge level
+    layer_mark_dirty(s_canvas_layer);
 }
 
 // --- Event handlers ---------------------------------------------------------
@@ -364,24 +401,33 @@ static void tick_handler(struct tm *tick_time, TimeUnits changed) {
 
     if ((tick_time->tm_min + 1) % settings.weatherInterval == 0) {
         int delay = rand() % 120000;
-        APP_LOG(APP_LOG_LEVEL_INFO, "Delaying weather call for %d millis", delay);
+        APP_LOG(APP_LOG_LEVEL_INFO, "Delaying weather call for %d ms", delay);
         app_timer_register(delay, weather_refresh_timer_handler, NULL);
     }
 }
 
 static void battery_handler(BatteryChargeState state) {
-    battery_state = state;
+    s_battery_state = state;
     update_battery();
 }
 
 static void bt_handler(bool connected) {
     bool prev = s_signal;
+    
     // Live quiet check, not s_quiet: the cached flag can be a minute stale
-    if (connected != prev && !quiet_time_is_active()) vibes_double_pulse();
+    if (connected != prev && !quiet_time_is_active()) {
+        vibes_double_pulse();
+    }
+    
     s_signal = connected;
     update_signal();
-    if (connected && !prev) update_weather();
-    layer_mark_dirty(s_canvas_layer); // Redraw canvas to update color
+    
+    if (connected && !prev) {
+        update_weather();
+    }
+    
+    // Redraw canvas to update color
+    layer_mark_dirty(s_canvas_layer);
 }
 
 static void inbox_received_handler(DictionaryIterator *iterator, void *context) {
@@ -481,7 +527,8 @@ static void outbox_sent_handler(DictionaryIterator *iterator, void *context) {
 }
 
 // --- Window lifecycle -------------------------------------------------------
-static TextLayer *setup_text_layer(Layer *root, GRect bounds, const char *text, GFont font) {
+static TextLayer *setup_text_layer(Layer *root, GRect bounds,
+                                   const char *text, GFont font) {
     TextLayer *layer = text_layer_create(bounds);
     if (text) text_layer_set_text(layer, text);
     text_layer_set_font(layer, font);
@@ -493,9 +540,11 @@ static TextLayer *setup_text_layer(Layer *root, GRect bounds, const char *text, 
 }
 
 static void window_load(Window *window) {
-    Layer *root = window_get_root_layer(window);
-    GRect bounds = layer_get_bounds(root);
-
+    Layer *root   = window_get_root_layer(window);
+    GRect  bounds = layer_get_bounds(root);
+    int    w      = bounds.size.w;
+    int    h      = bounds.size.h;
+    
     s_font_big   = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_MARATYPE_50));
     s_font_small = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_MARATYPE_16));
 
@@ -503,18 +552,17 @@ static void window_load(Window *window) {
     layer_set_update_proc(s_canvas_layer, canvas_update_proc);
     layer_add_child(root, s_canvas_layer);
 
-    s_top_layer     = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(30, 22),  bounds.size.w, 20), settings.topText, s_font_small);
-    s_signal_layer  = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(50, 42),  bounds.size.w, 20), NULL, s_font_small);
-    s_weather_layer = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(70, 62),  bounds.size.w, 20), NULL, s_font_small);
-    s_time_layer    = setup_text_layer(root, GRect(0, bounds.size.h / 2 - 26,     bounds.size.w, 62), NULL, s_font_big);
-    s_date_layer    = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(86, 78), bounds.size.w, 20), NULL, s_font_small);
-    s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(66, 58), bounds.size.w, 20), NULL, s_font_small);
-    s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(46, 38), bounds.size.w, 18), NULL, s_font_small);
+    s_top_layer     = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(30, 22), w, 20), settings.topText, s_font_small);
+    s_signal_layer  = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(50, 42), w, 20), NULL,             s_font_small);
+    s_weather_layer = setup_text_layer(root, GRect(0, PBL_IF_ROUND_ELSE(70, 62), w, 20), NULL,             s_font_small);
+    s_time_layer    = setup_text_layer(root, GRect(0, h / 2 - 26,                w, 62), NULL,             s_font_big);
+    s_date_layer    = setup_text_layer(root, GRect(0, h - PBL_IF_ROUND_ELSE(86, 78), w, 20), NULL,         s_font_small);
+    s_steps_layer   = setup_text_layer(root, GRect(0, h - PBL_IF_ROUND_ELSE(66, 58), w, 20), NULL,         s_font_small);
+    s_battery_layer = setup_text_layer(root, GRect(0, h - PBL_IF_ROUND_ELSE(46, 38), w, 18), NULL,         s_font_small);
 
-    battery_state = battery_state_service_peek();
-
-    s_signal = connection_service_peek_pebble_app_connection();
-    s_quiet  = quiet_time_is_active();
+    s_battery_state = battery_state_service_peek();
+    s_signal        = connection_service_peek_pebble_app_connection();
+    s_quiet         = quiet_time_is_active();
 
     update_time();
     update_steps();
@@ -536,6 +584,7 @@ static void window_unload(Window *window) {
     fonts_unload_custom_font(s_font_small);
 }
 
+// --- App lifecycle ----------------------------------------------------------
 static void init(void) {
     prv_load_settings();
 
