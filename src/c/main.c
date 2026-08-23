@@ -266,25 +266,29 @@ static void update_top_header(void) {
     text_layer_set_text(s_top_layer, s_quiet ? TEXT_QUIET : settings.topText);
 }
 
+static void update_backlight(void) {
+    #if PBL_COLOR
+    if (settings.changeBacklight)
+        light_set_color_rgb888(s_signal ? LIGHT_ACID : LIGHT_ALERT);
+    else
+        light_set_system_color();
+    #endif
+}
+
 static void update_signal(void) {
     if (s_signal) {
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_OK);
         text_layer_set_text_color(s_top_layer,     COLOR_ACID);
         text_layer_set_text_color(s_signal_layer,  COLOR_ACID);
         text_layer_set_text_color(s_weather_layer, COLOR_ACID);
-        #if PBL_COLOR
-            if (settings.changeBacklight) light_set_color_rgb888(LIGHT_ACID);
-        #endif
     } else {
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_LOST);
         text_layer_set_text(s_weather_layer, TEXT_ATMO_UNKNOWN);
         text_layer_set_text_color(s_top_layer,     COLOR_ALERT);
         text_layer_set_text_color(s_signal_layer,  COLOR_ALERT);
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
-        #if PBL_COLOR
-            if (settings.changeBacklight) light_set_color_rgb888(LIGHT_ALERT);
-        #endif
     }
+    update_backlight();
 }
 
 // Requests a weather fetch from the phone and update signal and weather
@@ -382,16 +386,13 @@ static void bt_handler(bool connected) {
 
 static void inbox_received_handler(DictionaryIterator *iterator, void *context) {
     // Settings tuples (present only when the Clay config page was submitted)
+    Tuple *topText_tuple         = dict_find(iterator, MESSAGE_KEY_topText);
     Tuple *showCity_tuple        = dict_find(iterator, MESSAGE_KEY_showCity);
     Tuple *showWeather_tuple     = dict_find(iterator, MESSAGE_KEY_showWeather);
     Tuple *useFahrenheit_tuple   = dict_find(iterator, MESSAGE_KEY_useFahrenheit);
     Tuple *weatherInterval_tuple = dict_find(iterator, MESSAGE_KEY_weatherInterval);
-    Tuple *topText_tuple         = dict_find(iterator, MESSAGE_KEY_topText);
+    Tuple *changeBacklight_tuple = dict_find(iterator, MESSAGE_KEY_changeBacklight);
 
-    if (showCity_tuple)        settings.showCity        = showCity_tuple->value->int32 == 1;
-    if (showWeather_tuple)     settings.showWeather     = showWeather_tuple->value->int32 == 1;
-    if (useFahrenheit_tuple)   settings.useFahrenheit   = useFahrenheit_tuple->value->int32 == 1;
-    if (weatherInterval_tuple) settings.weatherInterval = weatherInterval_tuple->value->int32;
     if (topText_tuple) {
         if (topText_tuple->value->cstring[0]) {
             snprintf(settings.topText, sizeof(settings.topText), "%s", topText_tuple->value->cstring);
@@ -401,8 +402,19 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
         update_top_header();
     }
 
+    if (showCity_tuple)        settings.showCity        = showCity_tuple->value->int32 == 1;
+    if (showWeather_tuple)     settings.showWeather     = showWeather_tuple->value->int32 == 1;
+    if (useFahrenheit_tuple)   settings.useFahrenheit   = useFahrenheit_tuple->value->int32 == 1;
+    if (weatherInterval_tuple) settings.weatherInterval = weatherInterval_tuple->value->int32;
+    
+    if (changeBacklight_tuple) {
+        settings.changeBacklight = changeBacklight_tuple->value->int32 == 1;
+        update_backlight();
+    }
+
     // Only touch flash when a settings tuple actually arrived
-    if (showCity_tuple || showWeather_tuple || useFahrenheit_tuple || weatherInterval_tuple || topText_tuple) {
+    if (topText_tuple || showCity_tuple || showWeather_tuple || useFahrenheit_tuple || 
+        weatherInterval_tuple || changeBacklight_tuple) {
         prv_save_settings();
     }
 
@@ -421,9 +433,7 @@ static void inbox_received_handler(DictionaryIterator *iterator, void *context) 
 
     // Weather layer — three cases:
     //  1. Full data (temp + conditions): render the normal weather line.
-    //  2. Conditions only (no temp): the JS sent a status/error string;
-    //     display it verbatim so the user sees exactly what went wrong on
-    //     the phone side (e.g. ">ACQUIRING GPS<", "!!HTTP 429!!", etc.).
+    //  2. Conditions only (no temp): the JS sent a status/error string.
     //  3. Neither: fall back to the generic unknown string.
     if (settings.showWeather && temp_tuple && conditions_tuple) {
         int t = settings.useFahrenheit

@@ -59,7 +59,8 @@ module.exports = [
                 "messageKey": "changeBacklight",
                 "defaultValue": true,
                 "label": "Change Backlight Colors",
-                "description": "Change backlight to Marathon Chartreuse during normal state, and Alert Magenta when Bluetooth is disconnected."
+                "description": "Change backlight to Marathon Chartreuse during normal state, and Alert Magenta when Bluetooth is disconnected. " +
+                "This setting has zero effect on devices that don't have colored backlights."
             },
             {
                 "type": "input",
