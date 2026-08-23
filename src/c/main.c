@@ -22,15 +22,17 @@
 #define SETTINGS_KEY_USE_FAHRENHEIT   103
 #define SETTINGS_KEY_WEATHER_INTERVAL 104
 #define SETTINGS_KEY_TOP_TEXT         105
+#define SETTINGS_KEY_CHANGE_BACKLIGHT 106
 
 #define SETTINGS_VERSION 1
 
 typedef struct ClaySettings {
+    char topText[26];
     bool showCity;
     bool showWeather;
     bool useFahrenheit;
     int weatherInterval;
-    char topText[26];
+    bool changeBacklight;
 } ClaySettings;
 
 static ClaySettings settings;
@@ -92,20 +94,22 @@ static const char FMT_DATE[]           = "%a - %b %d %Y";
 
 // --- Settings persistence ---------------------------------------------------
 static void prv_default_settings(void) {
+    snprintf(settings.topText, sizeof(settings.topText), "%s", TEXT_HEADER_DEFAULT);
     settings.showCity = true;
     settings.showWeather = true;
     settings.useFahrenheit = true;
     settings.weatherInterval = 30;
-    snprintf(settings.topText, sizeof(settings.topText), "%s", TEXT_HEADER_DEFAULT);
+    settings.changeBacklight = true;
 }
 
 static void prv_save_settings(void) {
     persist_write_int(SETTINGS_KEY_VERSION, SETTINGS_VERSION);
+    persist_write_string(SETTINGS_KEY_TOP_TEXT, settings.topText);
     persist_write_bool(SETTINGS_KEY_SHOW_CITY, settings.showCity);
     persist_write_bool(SETTINGS_KEY_SHOW_WEATHER, settings.showWeather);
     persist_write_bool(SETTINGS_KEY_USE_FAHRENHEIT, settings.useFahrenheit);
     persist_write_int(SETTINGS_KEY_WEATHER_INTERVAL, settings.weatherInterval);
-    persist_write_string(SETTINGS_KEY_TOP_TEXT, settings.topText);
+    persist_write_bool(SETTINGS_KEY_CHANGE_BACKLIGHT, settings.changeBacklight);
 }
 
 static void prv_migrate_legacy_settings(void) {
@@ -167,6 +171,9 @@ static void prv_load_settings(void) {
     prv_default_settings();
     prv_migrate_legacy_settings();
 
+    if (persist_exists(SETTINGS_KEY_TOP_TEXT)) 
+        persist_read_string(SETTINGS_KEY_TOP_TEXT, settings.topText, sizeof(settings.topText));
+
     if (persist_exists(SETTINGS_KEY_SHOW_CITY)) 
         settings.showCity = persist_read_bool(SETTINGS_KEY_SHOW_CITY);
 
@@ -179,8 +186,8 @@ static void prv_load_settings(void) {
     if (persist_exists(SETTINGS_KEY_WEATHER_INTERVAL)) 
         settings.weatherInterval = persist_read_int(SETTINGS_KEY_WEATHER_INTERVAL);
 
-    if (persist_exists(SETTINGS_KEY_TOP_TEXT)) 
-        persist_read_string(SETTINGS_KEY_TOP_TEXT, settings.topText, sizeof(settings.topText));
+    if (persist_exists(SETTINGS_KEY_CHANGE_BACKLIGHT))  
+        settings.changeBacklight = persist_read_bool(SETTINGS_KEY_CHANGE_BACKLIGHT);
 }
 
 // --- Canvas rendering -------------------------------------------------------
@@ -266,7 +273,7 @@ static void update_signal(void) {
         text_layer_set_text_color(s_signal_layer,  COLOR_ACID);
         text_layer_set_text_color(s_weather_layer, COLOR_ACID);
         #if PBL_COLOR
-            light_set_color_rgb888(LIGHT_ACID);
+            if (settings.changeBacklight) light_set_color_rgb888(LIGHT_ACID);
         #endif
     } else {
         text_layer_set_text(s_signal_layer, TEXT_SIGNAL_LOST);
@@ -275,7 +282,7 @@ static void update_signal(void) {
         text_layer_set_text_color(s_signal_layer,  COLOR_ALERT);
         text_layer_set_text_color(s_weather_layer, COLOR_ALERT);
         #if PBL_COLOR
-            light_set_color_rgb888(LIGHT_ALERT);
+            if (settings.changeBacklight) light_set_color_rgb888(LIGHT_ALERT);
         #endif
     }
 }

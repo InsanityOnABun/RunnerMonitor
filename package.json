@@ -22,7 +22,8 @@
             "showWeather",
             "topText",
             "useFahrenheit",
-            "weatherInterval"
+            "weatherInterval",
+            "changeBacklight"
         ],
         "projectType": "native",
         "resources": {

@@ -55,6 +55,13 @@ module.exports = [
                 "defaultValue": "Misc"
             },
             {
+                "type": "toggle",
+                "messageKey": "changeBacklight",
+                "defaultValue": true,
+                "label": "Change Backlight Colors",
+                "description": "Change backlight to Marathon Chartreuse during normal state, and Alert Magenta when Bluetooth is disconnected."
+            },
+            {
                 "type": "input",
                 "messageKey": "topText",
                 "label": "Text to show at the top of the watchface",
