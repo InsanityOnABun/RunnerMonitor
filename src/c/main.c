@@ -60,13 +60,12 @@ static char s_date_buf[20];
 static char s_steps_buf[16];
 static char s_battery_buf[24];
 
-static int  s_battery;
 static int  s_steps;
 
 static bool s_signal;
-static bool s_charging;
-static bool s_plugged;
 static bool s_quiet;
+
+static BatteryChargeState battery_state;
 
 // --- Display strings --------------------------------------------------------
 static const char TEXT_HEADER_DEFAULT[]   = "RUNNER // MONITOR";
@@ -247,7 +246,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     int total = 10 * seg_w + 9 * gap;
     int bx = (b.size.w - total) / 2;
     int by = b.size.h - m - seg_h - PBL_IF_ROUND_ELSE(16, 8);
-    int lit = (s_battery + 9) / 10;
+    int lit = (battery_state.charge_percent + 9) / 10;
     for (int i = 0; i < 10; i++) {
         GRect seg = GRect(bx + i * (seg_w + gap), by, seg_w, seg_h);
         if (i < lit) graphics_fill_rect(ctx, seg, 0, GCornerNone);
@@ -324,13 +323,13 @@ static void update_steps(void) {
 
 static void update_battery(void) {
     // is_plugged stays true while charging, so test s_charging first
-    if (s_charging) {
-        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY_REPAIR, s_battery);
+    if (battery_state.is_charging) {
+        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY_REPAIR, battery_state.charge_percent);
         text_layer_set_text(s_battery_layer, s_battery_buf);
-    } else if (s_plugged) {
+    } else if (battery_state.is_plugged) {
         text_layer_set_text(s_battery_layer, TEXT_BATTERY_MAX);
     } else {
-        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY, s_battery);
+        snprintf(s_battery_buf, sizeof(s_battery_buf), FMT_BATTERY, battery_state.charge_percent);
         text_layer_set_text(s_battery_layer, s_battery_buf);
     }
 }
@@ -359,9 +358,7 @@ static void tick_handler(struct tm *tick_time, TimeUnits changed) {
 }
 
 static void battery_handler(BatteryChargeState state) {
-    s_battery  = state.charge_percent;
-    s_charging = state.is_charging;
-    s_plugged  = state.is_plugged;
+    battery_state = state;
     update_battery();
     layer_mark_dirty(s_canvas_layer); // Redraw canvas in case battery bar changes
 }
@@ -497,10 +494,7 @@ static void window_load(Window *window) {
     s_steps_layer   = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(66, 58), bounds.size.w, 20), NULL, s_font_small);
     s_battery_layer = setup_text_layer(root, GRect(0, bounds.size.h - PBL_IF_ROUND_ELSE(46, 38), bounds.size.w, 18), NULL, s_font_small);
 
-    BatteryChargeState charge_state = battery_state_service_peek();
-    s_battery  = charge_state.charge_percent;
-    s_charging = charge_state.is_charging;
-    s_plugged  = charge_state.is_plugged;
+    battery_state = battery_state_service_peek();
 
     s_signal = connection_service_peek_pebble_app_connection();
     s_quiet  = quiet_time_is_active();
